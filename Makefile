@@ -1,47 +1,48 @@
 ASM = ca65
 LD = ld65
-C1541 = ~/Desktop/vice-arm64-sdl2-3.10/bin/c1541
-VICE = ~/Desktop/vice-arm64-sdl2-3.10/bin/x64sc
 
-SRC = src/soundemon_loop.asm
+SRC = src/nin64k.asm
 CFG = src/c64.cfg
-OBJ = build/soundemon_loop.o
-PRG = build/soundemon_loop.prg
-D64 = build/ninjas.d64
+OBJ = build/nin64k.o
+PRG = build/nin64k.prg
 
-PATCH_DATA = build/patch_data.inc build/player_odd_base.bin build/player_even_base.bin
+SELFTEST_SRC = src/nin64selftest.asm
+SELFTEST_OBJ = build/nin64selftest.o
+SELFTEST_PRG = build/nin64selftest.prg
 
-.PHONY: all clean run generate-patches
+.PHONY: all clean run selftest run-selftest
 
-all: $(D64)
+all: $(PRG)
 
-# Generate patch data and base players from original songs
-$(PATCH_DATA): $(wildcard uncompressed/d*p.raw)
-	@mkdir -p build
-	node generate_patches.js
-
-generate-patches: $(PATCH_DATA)
-
-$(OBJ): $(SRC) $(PATCH_DATA)
+$(OBJ): $(SRC) generated/decompress.asm generated/stream_main.bin generated/stream_tail.bin
 	@mkdir -p build
 	$(ASM) -o $@ $<
 
 $(PRG): $(OBJ) $(CFG)
 	$(LD) -C $(CFG) -o $@ $<
 
-$(D64): $(PRG) $(PATCH_DATA)
-	$(C1541) -format "ninjas,00" d64 $@ \
-		-write $(PRG) "nin-soundemon" \
-		-write uncompressed/d1p.raw "d1" \
-		-write uncompressed/d2p.raw "d2" \
-		-write uncompressed/d3p.raw "d3" \
-		-write uncompressed/d4p.raw "d4" \
-		-write uncompressed/d5p.raw "d5" \
-		-write uncompressed/d6p.raw "d6" \
-		-write uncompressed/d7p.raw "d7"
+run: $(PRG)
+ifdef VICE_BIN
+	$(VICE_BIN)/x64sc $(PRG) &
+else
+	@echo "Set VICE_BIN to run in emulator, e.g.: export VICE_BIN=~/path/to/vice/bin"
+endif
 
-run: $(D64)
-	$(VICE) -warp $(D64) &
+selftest: $(SELFTEST_PRG)
+
+$(SELFTEST_OBJ): $(SELFTEST_SRC) generated/decompress.asm generated/stream_main.bin generated/stream_tail.bin
+	@mkdir -p build
+	$(ASM) -o $@ $<
+
+$(SELFTEST_PRG): $(SELFTEST_OBJ) $(CFG)
+	$(LD) -C $(CFG) -o $@ $<
+
+run-selftest: $(SELFTEST_PRG)
+ifdef VICE_BIN
+	$(VICE_BIN)/x64sc -warp $(SELFTEST_PRG) &
+else
+	@echo "Set VICE_BIN to run in emulator, e.g.: export VICE_BIN=~/path/to/vice/bin"
+endif
 
 clean:
-	rm -rf build/*.o build/*.prg build/*.d64 build/*.d71 build/*.bin build/*.inc
+	rm -rf build/*.o build/*.prg build/*.bin build/*.inc

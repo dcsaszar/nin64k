@@ -31,42 +31,34 @@
 .setcpu "6502"
 
 ; Zero page
-zp_selected     = $78
 zp_load_flag    = $79
 zp_part_num     = $7B
-zp_ptr_lo       = $8C
-zp_ptr_hi       = $8D
+; Copy routine zero page ($DB-$E6)
+zp_size_lo      = $DB
+zp_size_hi      = $DC
+zp_copy_rem     = $E0
+zp_copy_src_lo  = $E3
+zp_copy_src_hi  = $E4
+zp_copy_dst_lo  = $E5
+zp_copy_dst_hi  = $E6
 
-; Hardware
-VIC_D011        = $D011
-VIC_D012        = $D012
-VIC_D018        = $D018
-VIC_D019        = $D019
-VIC_D01A        = $D01A
-VIC_D020        = $D020
-VIC_D021        = $D021
-CIA1_DC0D       = $DC0D
-CIA2_DD00       = $DD00
+; Decompressor zero page (external interface)
+zp_src_lo       = $02
+zp_src_hi       = $03
+zp_bitbuf       = $04
+zp_out_lo       = $05
+zp_out_hi       = $06
 
-; KERNAL
-SCNKEY          = $FF9F
-GETIN           = $FFE4
-CHROUT          = $FFD2
-IRQ_RETURN      = $EA31
+; Stream destinations for in-place decompression (see README.md)
+; stream_main goes to high memory (ends at $FFFD, leaving $FFFE-$FFFF for IRQ vector)
+STREAM_MAIN_DEST = $10000 - (stream_tail - stream_main) - 2
+STREAM_TAIL_DEST = $663B
 
-; Tune entry points (jump vectors copied here)
-TUNE1_BASE      = $1000
+; Tune entry points
 TUNE1_INIT      = $1000
 TUNE1_PLAY      = $1003
-TUNE2_BASE      = $7000
 TUNE2_INIT      = $7000
 TUNE2_PLAY      = $7003
-
-; Player code starts at $1009/$7009, data at $198C/$798C
-TUNE1_PLAYER    = $1009
-TUNE1_DATA      = $198C
-TUNE2_PLAYER    = $7009
-TUNE2_DATA      = $798C
 
 .segment "LOADADDR"
         .word   $0801
@@ -88,8 +80,7 @@ basic_stub:
 ; ----------------------------------------------------------------------------
 start:
         jsr     init_game
-        sta     $7B
-;       jsr     copy_players        ; Disabled: PRG overlaps $1009
+        sta     zp_part_num
         jsr     setup_irq
         lda     #<msg_loading
         sta     $8C
@@ -98,7 +89,7 @@ start:
         jsr     print_msg
         jsr     load_d0
         jsr     load_and_init
-        inc     $7B
+        inc     zp_part_num
         lda     #<msg_title
         sta     $8C
         lda     #>msg_title
@@ -109,16 +100,31 @@ start:
 
 ; ----------------------------------------------------------------------------
 main_loop:
-        lda     $79
+        lda     zp_load_flag
         bne     do_load_next
-        jsr     $FF9F
-        jsr     $FFE4
-        cmp     #$5F
-        bne     main_loop
-        inc     $D020
-        sei
-        jsr     play_tick
-        cli
+        ; Direct keyboard read (CIA1 at $DC00/$DC01, I/O already banked in)
+        lda     #$7F                ; Select row 7
+        sta     $DC00
+        lda     $DC01
+        and     #$10                ; Check bit 4 (space bar)
+        bne     main_loop           ; Not pressed
+@debounce:
+        lda     $DC01               ; Wait for release
+        and     #$10
+        beq     @debounce
+        ; Reset SID
+        ldx     #$18
+        lda     #$00
+@sid:   sta     $D400,x
+        dex
+        bpl     @sid
+        ; Advance to next song
+        lda     zp_part_num
+        cmp     #$09                ; Stop at song 9
+        beq     main_loop
+        lda     #$FF
+        sta     zp_load_flag
+        inc     zp_part_num
         jmp     main_loop
 
 ; ----------------------------------------------------------------------------
@@ -127,7 +133,7 @@ do_load_next:
         sta     $0427
         jsr     load_and_init
         lda     #$00
-        sta     $79
+        sta     zp_load_flag
         lda     #$20
         sta     $0427
         jmp     main_loop
@@ -135,57 +141,66 @@ do_load_next:
 ; ----------------------------------------------------------------------------
 setup_irq:
         sei
-        lda     #$36
+        lda     #$35                ; I/O on, KERNAL off
         sta     $01
         lda     #$7F
-        sta     $DC0D
+        sta     $DC0D               ; Disable CIA interrupts
         lda     #$01
-        sta     $D01A
+        sta     $D01A               ; Enable VIC raster interrupt
         lda     $D011
         and     #$7F
         sta     $D011
         lda     #$33
-        sta     $D012
-        lda     $DC0D
-        lda     #$95
-        sta     $0314
-        lda     #$08
-        sta     $0315
+        sta     $D012               ; Raster line $33
+        lda     $DC0D               ; Acknowledge pending CIA
+        ; Set up RAM-based IRQ vector at $FFFE/$FFFF
+        lda     #$30                ; All RAM to write vectors
+        sta     $01
+        lda     #<irq_handler
+        sta     $FFFE
+        lda     #>irq_handler
+        sta     $FFFF
+        lda     #$35                ; Back to I/O mode
+        sta     $01
         cli
         rts
 
 ; ----------------------------------------------------------------------------
 irq_handler:
         pha
+        lda     $01                 ; Save bank config
+        pha
         txa
         pha
         tya
         pha
+        lda     #$35                ; Bank in I/O
+        sta     $01
         lda     $D019
-        sta     $D019
+        sta     $D019               ; Acknowledge VIC interrupt
         lda     #$16
         sta     $D018
-        lda     $7B
+        lda     zp_part_num
         cmp     $78
-        beq     L8B8
+        beq     @irq_done
         lda     #$07
         sta     $D020
         jsr     play_tick
         lda     #$00
         sta     $D020
-
-; ----------------------------------------------------------------------------
-L8B8:
+@irq_done:
         pla
         tay
         pla
         tax
         pla
-        jmp     $EA31
+        sta     $01                 ; Restore bank config
+        pla
+        rti
 
 ; ----------------------------------------------------------------------------
 play_tick:
-        lda     $7B
+        lda     zp_part_num
         and     #$01
         beq     L8CC
         jsr     $1003
@@ -197,7 +212,7 @@ L8CC:
 
 ; ----------------------------------------------------------------------------
 check_countdown:
-        lda     $7B
+        lda     zp_part_num
         asl     a
         tax
         dex
@@ -217,15 +232,131 @@ L8E8:
         bne     play_done
         lda     part_times+1,x
         bne     play_done
-        lda     $7B
-        cmp     #$07                ; Stop at song 7 (limited disk space)
+        lda     zp_part_num
+        cmp     #$09                ; Stop at song 9
         beq     play_done
         lda     #$FF
-        sta     $79
-        inc     $7B
+        sta     zp_load_flag
+        inc     zp_part_num
 
 ; ----------------------------------------------------------------------------
 play_done:
+        rts
+
+; ----------------------------------------------------------------------
+; Copy compressed streams to destinations for in-place decompression
+; stream_main -> high memory (under ROMs)
+; stream_tail -> $663B-$6FFF (buffer A tail)
+; NOTE: This routine must be located BEFORE $663B to avoid self-overwrite
+; ----------------------------------------------------------------------
+STREAM_MAIN_SIZE = stream_tail - stream_main
+STREAM_TAIL_SIZE = stream_end - stream_tail
+
+copy_streams:
+        sei                         ; Must disable IRQs when KERNAL banked out
+        lda     #$30                ; All RAM (including $D000-$DFFF, no I/O)
+        sta     $01
+
+        ; Copy stream_main to high memory
+        lda     #<stream_main
+        sta     zp_copy_src_lo
+        lda     #>stream_main
+        sta     zp_copy_src_hi
+        lda     #<STREAM_MAIN_DEST
+        sta     zp_copy_dst_lo
+        lda     #>STREAM_MAIN_DEST
+        sta     zp_copy_dst_hi
+        ldx     #>STREAM_MAIN_SIZE
+        lda     #<STREAM_MAIN_SIZE
+        sta     zp_copy_rem
+        jsr     copy_bytes_bwd
+
+        ; Copy stream_tail to buffer A tail (forward copy - dst < src overlap)
+        lda     #<stream_tail
+        sta     zp_copy_src_lo
+        lda     #>stream_tail
+        sta     zp_copy_src_hi
+        lda     #<STREAM_TAIL_DEST
+        sta     zp_copy_dst_lo
+        lda     #>STREAM_TAIL_DEST
+        sta     zp_copy_dst_hi
+        lda     #<STREAM_TAIL_SIZE
+        sta     zp_size_lo
+        lda     #>STREAM_TAIL_SIZE
+        sta     zp_size_hi
+        jsr     copy_bytes_fwd
+
+        lda     #$37                ; Restore ROMs
+        sta     $01
+        cli                         ; Re-enable IRQs
+        rts
+
+; Copy X full pages + remainder bytes, backwards (safe for overlapping regions)
+; Inputs: zp_copy_src, zp_copy_dst point to START, X = full pages, zp_copy_rem = remainder
+copy_bytes_bwd:
+        txa
+        clc
+        adc     zp_copy_src_hi
+        sta     zp_copy_src_hi
+        txa
+        clc
+        adc     zp_copy_dst_hi
+        sta     zp_copy_dst_hi
+        ; Now pointers are at last page, copy remainder first
+        ldy     zp_copy_rem
+        beq     @pages
+        dey
+@rem_loop:
+        lda     (zp_copy_src_lo),y
+        sta     (zp_copy_dst_lo),y
+        dey
+        cpy     #$FF
+        bne     @rem_loop
+@pages:
+        cpx     #0
+        beq     @done
+@page_loop:
+        dec     zp_copy_src_hi
+        dec     zp_copy_dst_hi
+        ldy     #$FF
+@byte_loop:
+        lda     (zp_copy_src_lo),y
+        sta     (zp_copy_dst_lo),y
+        dey
+        cpy     #$FF
+        bne     @byte_loop
+        dex
+        bne     @page_loop
+@done:  rts
+
+; Copy bytes forward (safe for overlapping regions when dst < src)
+; Inputs: zp_copy_src, zp_copy_dst point to START, zp_size = byte count
+copy_bytes_fwd:
+        ldy     #$00
+@fwd_loop:
+        lda     zp_size_lo
+        ora     zp_size_hi
+        beq     @fwd_done
+        lda     (zp_copy_src_lo),y
+        sta     (zp_copy_dst_lo),y
+        ; Increment source
+        inc     zp_copy_src_lo
+        bne     @no_src_carry
+        inc     zp_copy_src_hi
+@no_src_carry:
+        ; Increment dest
+        inc     zp_copy_dst_lo
+        bne     @no_dst_carry
+        inc     zp_copy_dst_hi
+@no_dst_carry:
+        ; Decrement size
+        lda     zp_size_lo
+        bne     @dec_size_lo
+        dec     zp_size_hi
+@dec_size_lo:
+        dec     zp_size_lo
+        jmp     @fwd_loop
+@fwd_done:
         rts
 
 ; ----------------------------------------------------------------------------
@@ -355,31 +486,28 @@ print_done:
 
 ; ----------------------------------------------------------------------------
 load_and_init:
-        lda     $7B
-        cmp     #$07                ; Stop at song 7 (limited disk space)
+        lda     zp_part_num
+        cmp     #$09                ; Stop at song 9
         bne     L9BC
         rts
 
 ; ----------------------------------------------------------------------------
 L9BC:
         ldx     #$44
-        lda     $7B
+        lda     zp_part_num
         clc
         adc     #$31
         tay
         jsr     load_tune
-        bcs     load_error
         lda     #$A1
         sta     $0427
-        lda     $7B
+        lda     zp_part_num
         and     #$01
         bne     init_buf2
 
 ; ----------------------------------------------------------------------------
 ; init_buf1: Called for EVEN $7B (0,2,4,6,8) → loads ODD files to $1000
 init_buf1:
-        lda     #$60
-        sta     $105C               ; Patch stop routine
         lda     #$00
         jsr     TUNE1_INIT
 load_done:
@@ -388,40 +516,16 @@ load_done:
 ; ----------------------------------------------------------------------------
 ; init_buf2: Called for ODD $7B (1,3,5,7) → loads EVEN files to $7000
 init_buf2:
-        lda     #$60
-        sta     $705C               ; Patch stop routine
         lda     #$00
         jsr     TUNE2_INIT
-        jmp     load_done
-
-; ----------------------------------------------------------------------------
-load_error:
-        lda     #<msg_error
-        sta     $8C
-        lda     #>msg_error
-        sta     $8D
-        jsr     print_msg
-        lda     $7B
-        asl     a
-        tax
-        dex
-        dex
-        lda     #$FF
-        sta     part_times,x
-        jmp     load_done
+        rts
 
 ; ----------------------------------------------------------------------
 ; Message text
 ; ----------------------------------------------------------------------
-msg_menu:
-        .res    125, $00                ; Padding (menu text removed)
 msg_loading:
         .byte   $CC
         .byte   "OADING..."
-        .byte   $00                     ; End of string
-msg_error:
-        .byte   $CC
-        .byte   "OAD ERROR"
         .byte   $00                     ; End of string
 msg_title:
         .byte   $CE
@@ -492,235 +596,66 @@ load_tune:
         jmp     load_tune_impl
 
 ; ----------------------------------------------------------------------------
+; Initialize stream pointer for in-memory decompression
+; ----------------------------------------------------------------------------
 load_d0_impl:
-        lda     #<(drivecode-1)
-        sta     upload_lda+1
-        lda     #>(drivecode-1)
-        sta     upload_lda+2
-        lda     #$00
-        sta     fastload_params+2
-        lda     #$05
-        sta     fastload_params+1
+        lda     #<STREAM_MAIN_DEST
+        sta     zp_src_lo
+        lda     #>STREAM_MAIN_DEST
+        sta     zp_src_hi
+        lda     #$80
+        sta     zp_bitbuf
+        rts
 
 ; ----------------------------------------------------------------------------
-LC1A:
-        jsr     setup_drive
-        ldx     #$05
-
-; ----------------------------------------------------------------------------
-LC1F:
-        lda     fastload_params,x
-        jsr     $FFA8
-        dex
-        bpl     LC1F
-        ldx     #$00
-
-; ----------------------------------------------------------------------------
-upload_lda:
-        lda     drivecode,x
-        jsr     $FFA8
-        inx
-        cpx     #$20
-        bne     upload_lda
-        jsr     $FFAE
-        clc
-        lda     #$20
-        adc     upload_lda+1
-        sta     upload_lda+1
-        bcc     LC47
-        clc
-        inc     upload_lda+2
-
-; ----------------------------------------------------------------------------
-LC47:
-        lda     #$20
-        adc     fastload_params+2
-        sta     fastload_params+2
-        tax
-        lda     #$00
-        adc     fastload_params+1
-        sta     fastload_params+1
-        cpx     #$32
-        sbc     #$06
-        bcc     LC1A
-        jsr     setup_drive
-        ldx     #$04
-
-; ----------------------------------------------------------------------------
-LC63:
-        lda     fastload_counter,x
-        jsr     $FFA8
-        dex
-        bpl     LC63
-        jmp     $FFAE
-
-; ----------------------------------------------------------------------------
-setup_drive:
-        lda     $BA
-        jsr     $FFB1
-        lda     #$6F
-        jmp     $FF93
-
-; ----------------------------------------------------------------------
-; Fastload parameters
-; ----------------------------------------------------------------------
-fastload_params:
-        .byte   $20, $06, $40, $57, $2D, $4D    ; M-W command template
-fastload_counter:
-        .byte   $05, $00                        ; 16-bit counter
-        .byte   $45, $2D, $4D                   ; M-E command
-
+; Load tune from memory using in-place decompression
+; X, Y = ignored (were filename chars for disk load)
+; Returns: C=0 success, C=1 error (not used for memory load)
 ; ----------------------------------------------------------------------------
 load_tune_impl:
-        lda     $DD00
-        and     #$CF
-        sta     getbit_imm2+1
-        sta     sendbyte_imm2+1
-        eor     #$10
-        sta     getbit_imm1+1
-        sta     sendbyte_imm1+1
-        txa
-        jsr     fastload_sendbyte
-        tya
-        jsr     fastload_sendbyte
-        jsr     set_load_dest       ; Set Y=0 and store_byte+2 based on part
-        nop                         ; Padding to maintain original size
-        nop
-        nop
-        nop
-        nop
-        nop
-        nop
-
-; ----------------------------------------------------------------------------
-LCA9:
-        jsr     fastload_byte
-store_byte:
-        sta     $9F00,y
-        iny
-        bne     LCA9
-        inc     store_byte+2
-        jmp     LCA9
-
-; ----------------------------------------------------------------------------
-fastload_byte:
-        jsr     fastload_getbit
-        cmp     #$AC
-        bne     LCCA
-        jsr     fastload_getbit
-        cmp     #$AC
-        beq     LCCA
-        cmp     #$01
-        pla
-        pla
-
-; ----------------------------------------------------------------------------
-LCCA:
+        ; Set output destination based on part number
+        lda     #$00
+        sta     zp_out_lo
+        lda     zp_part_num
+        and     #$01
+        beq     @even_part
+        lda     #$70                ; Odd part num -> $7000
+        bne     @do_decompress
+@even_part:
+        lda     #$10                ; Even part num -> $1000
+@do_decompress:
+        sta     zp_out_hi
+        ; Call decompressor in all-RAM mode (stream spans I/O region)
+        lda     #$30                ; All RAM
+        sta     $01
+        jsr     decompress
+        ; Song 9 is split: stream_main has first part, stream_tail has rest
+        lda     zp_part_num
+        cmp     #$08                ; Song 9 = part 8
+        bne     @load_done
+        lda     #<STREAM_TAIL_DEST
+        sta     zp_src_lo
+        lda     #>STREAM_TAIL_DEST
+        sta     zp_src_hi
+        lda     #$80
+        sta     zp_bitbuf
+        jsr     decompress
+@load_done:
+        lda     #$35                ; Back to I/O mode
+        sta     $01
+        clc                         ; Success
         rts
 
-; ----------------------------------------------------------------------------
-fastload_getbit:
-        ldx     #$08
-
-; ----------------------------------------------------------------------------
-LCCD:
-        lda     $DD00
-        and     #$C0
-        eor     #$C0
-        beq     LCCD
-        asl     a
-getbit_imm1:
-        lda     #$D7
-        bcs     LCDD
-        eor     #$30
-
-; ----------------------------------------------------------------------------
-LCDD:
-        sta     $DD00
-        ror     $8B
-        lda     #$C0
-
-; ----------------------------------------------------------------------------
-LCE4:
-        bit     $DD00
-        beq     LCE4
-getbit_imm2:
-        lda     #$C7
-        sta     $DD00
-        dex
-        bne     LCCD
-        lda     $8B
-        rts
-
-; ----------------------------------------------------------------------------
-fastload_sendbyte:
-        sta     $8B
-        ldx     #$08
-
-; ----------------------------------------------------------------------------
-LCF8:
-        lsr     $8B
-sendbyte_imm1:
-        lda     #$D7
-        bcc     LD00
-        eor     #$30
-
-; ----------------------------------------------------------------------------
-LD00:
-        sta     $DD00
-        lda     #$C0
-
-; ----------------------------------------------------------------------------
-LD05:
-        bit     $DD00
-        bne     LD05
-sendbyte_imm2:
-        lda     #$C7
-        sta     $DD00
-
-; ----------------------------------------------------------------------------
-LD0F:
-        lda     $DD00
-        and     #$C0
-        eor     #$C0
-        bne     LD0F
-        dex
-        bne     LCF8
-        rts
-        cld
-
-; ----------------------------------------------------------------------
-; Drive code (uploaded to 1541)
-; ----------------------------------------------------------------------
-drivecode:
-        .byte   $58, $AD, $00, $1C, $29, $F7, $8D, $00, $1C, $20, $03, $06, $8D, $32, $06, $20
-        .byte   $03, $06, $8D, $33, $06, $A9, $08, $0D, $00, $1C, $8D, $00, $1C, $A2, $12, $A0
-        .byte   $01, $86, $08, $84, $09, $20, $AF, $05, $B0, $2A, $A0, $02, $B9, $00, $04, $29
-        .byte   $83, $C9, $82, $D0, $10, $B9, $03, $04, $CD, $32, $06, $D0, $08, $B9, $04, $04
-        .byte   $CD, $33, $06, $F0, $1C, $98, $18, $69, $20, $A8, $90, $E0, $AC, $01, $04, $AE
-        .byte   $00, $04, $D0, $CD, $A2, $AC, $20, $DD, $05, $A2, $01, $20, $DD, $05, $4C, $01
-        .byte   $05, $B9, $01, $04, $85, $08, $B9, $02, $04, $85, $09, $20, $AF, $05, $B0, $E4
-        .byte   $A0, $00, $AD, $01, $04, $85, $09, $AD, $00, $04, $85, $08, $D0, $04, $AC, $01
-        .byte   $04, $C8, $8C, $32, $06, $A0, $02, $BE, $00, $04, $E0, $AC, $D0, $05, $20, $DD
-        .byte   $05, $A2, $AC, $20, $DD, $05, $C8, $CC, $32, $06, $D0, $EB, $AD, $00, $04, $D0
-        .byte   $CA, $A2, $AC, $20, $DD, $05, $A2, $00, $20, $DD, $05, $4C, $01, $05, $A0, $05
-        .byte   $58, $A9, $80, $85, $01, $A5, $01, $30, $FC, $C9, $01, $D0, $03, $18, $78, $60
-        .byte   $88, $30, $16, $C0, $02, $D0, $04, $A9, $C0, $85, $01, $A5, $16, $85, $12, $A5
-        .byte   $17, $85, $13, $A5, $01, $30, $FC, $10, $D8, $38, $78, $60, $86, $14, $A2, $08
-        .byte   $46, $14, $A9, $02, $B0, $02, $A9, $08, $8D, $00, $18, $AD, $00, $18, $29, $05
-        .byte   $49, $05, $D0, $F7, $8D, $00, $18, $A9, $05, $2C, $00, $18, $D0, $FB, $CA, $D0
-        .byte   $DF, $60, $A2, $08, $A9, $85, $2D, $00, $18, $30, $22, $F0, $F7, $4A, $A9, $02
-        .byte   $90, $02, $A9, $08, $8D, $00, $18, $66, $14, $AD, $00, $18, $29, $05, $49, $05
-        .byte   $F0, $F7, $A9, $00, $8D, $00, $18, $CA, $D0, $DA, $A5, $14, $60, $68, $68, $58
-        .byte   $60, $00, $00
-
-; ----------------------------------------------------------------------------
-decompress:
-        rts
+; ============================================================================
+; V23 Decompressor - generated by ./compress
+; Setup: zp_src, zp_bitbuf=$80, zp_out ($1000 or $7000)
+; ============================================================================
+.include "../generated/decompress.asm"
 
 ; ----------------------------------------------------------------------------
 ; ----------------------------------------------------------------------------
 init_game:
+        jsr     copy_streams        ; Copy compressed data to safe location
         lda     #$00
         sta     $78                 ; Auto-select part 1 (skip menu)
         sta     $D020
@@ -735,7 +670,7 @@ LFCD:
         cpx     #$12
         bne     LFCD
         lda     #$FF
-        sta     $79
+        sta     zp_load_flag
         lda     $78
         rts
 
@@ -747,17 +682,11 @@ init_timing_data:
         .byte   $00, $01, $72, $C0, $57, $D0, $88, $A4, $C0, $F6, $79, $1A, $49, $F0, $7B, $00
         .byte   $01
 
-; ----------------------------------------------------------------------------
-; Set load destination based on song number (full files only)
-set_load_dest:
-        ldy     #$00
-        sty     store_byte+1
-        lda     zp_part_num
-        and     #$01
-        beq     @odd
-        lda     #$70                ; Odd $7B → $7000
-        bne     @store
-@odd:   lda     #$10                ; Even $7B → $1000
-@store: sta     store_byte+2
-        rts
-
+; ----------------------------------------------------------------------
+; Compressed stream data
+; ----------------------------------------------------------------------
+stream_main:
+        .incbin "../generated/stream_main.bin"
+stream_tail:
+        .incbin "../generated/stream_tail.bin"
+stream_end:
