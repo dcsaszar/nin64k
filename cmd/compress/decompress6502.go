@@ -494,7 +494,7 @@ func GetDecompressorCodeWithLabels() ([]byte, map[string]int) {
 	noHighWrapPos := label("no_high_wrap")
 	patchRel(bccNoHighWrap, noHighWrapPos)
 	bneFwdrefToCopy := pos()
-	emit(0xD0, 0x00) // BNE store_copy_hi (always taken)
+	emit(0xD0, 0x00) // BNE backref_no_adjust (always taken)
 
 	// ==================== BACKREF ====================
 	// X adjustment via fall-through INX chain (saves 1 byte vs DEX DEX INX)
@@ -545,13 +545,9 @@ func GetDecompressorCodeWithLabels() ([]byte, map[string]int) {
 	needAdjustPos := label("backref_adjust")
 	patchRel(bccNeedAdjust, needAdjustPos)
 	emit(0x69, 0xC0) // ADC #$C0 (convert to otherDict address, C=0)
-	noAdjustPos := label("backref_no_adjust")
-	patchRel(bcsNoAdjust, noAdjustPos)
-	// Falls through to store_copy_hi
-
-	// ==================== STORE_COPY_HI (shared) ====================
-	storeCopyHiPos := label("store_copy_hi")
-	patchRel(bneFwdrefToCopy, storeCopyHiPos)
+	backrefNoAdjustPos := label("backref_no_adjust")
+	patchRel(bcsNoAdjust, backrefNoAdjustPos)
+	patchRel(bneFwdrefToCopy, backrefNoAdjustPos)
 	emit(0x85, zpRefHi) // STA zpRefHi (shared by fwdref and backref)
 
 	// ==================== COPY_WITH_LENGTH ====================
