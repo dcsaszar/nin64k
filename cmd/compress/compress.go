@@ -89,6 +89,7 @@ type compressStats struct {
 	dictOther     int
 	dictOtherBits int
 	maxGammaZeros int // max leading zeros in any gamma encoding
+	maxLength     int // max copy length used
 }
 
 // Scratch regions (offsets relative to buffer base) that the playroutine corrupts.
@@ -497,6 +498,9 @@ func compress(target, selfDict, otherDict []byte) ([]byte, int, compressStats) {
 			writeBits(int(target[pos]), 8)
 			pos++
 		case 1: // self-ref
+			if ch.length > stats.maxLength {
+				stats.maxLength = ch.length
+			}
 			rem := ch.dist % 3
 			d := ch.dist / 3
 			if rem == 0 {
@@ -526,6 +530,9 @@ func compress(target, selfDict, otherDict []byte) ([]byte, int, compressStats) {
 			writeExpGolomb(ch.length-2, kLen)
 			pos += ch.length
 		case 2: // dict-self (no bias): offset = ringPos - pos
+			if ch.length > stats.maxLength {
+				stats.maxLength = ch.length
+			}
 			stats.dictSelf++
 			offset := ch.dictPos - pos
 			stats.dictSelfBits += 4 + expGolombBits(offset, kOffset) + expGolombBits(ch.length-2, kLen)
@@ -534,6 +541,9 @@ func compress(target, selfDict, otherDict []byte) ([]byte, int, compressStats) {
 			writeExpGolomb(ch.length-2, kLen)
 			pos += ch.length
 		case 3: // dict-other ($6000 bias): encoded = addr - pos - bufferSize
+			if ch.length > stats.maxLength {
+				stats.maxLength = ch.length
+			}
 			stats.dictOther++
 			encoded := ch.dictPos - pos - bufferSize
 			stats.dictOtherBits += 5 + expGolombBits(encoded, kOffset) + expGolombBits(ch.length-2, kLen)
@@ -950,6 +960,9 @@ func main() {
 		if r.stats.maxGammaZeros > totalStats.maxGammaZeros {
 			totalStats.maxGammaZeros = r.stats.maxGammaZeros
 		}
+		if r.stats.maxLength > totalStats.maxLength {
+			totalStats.maxLength = r.stats.maxLength
+		}
 		destAddr := addrLow
 		if song%2 == 0 {
 			destAddr = addrHigh
@@ -976,6 +989,7 @@ func main() {
 	totalBits := totalStats.literalBits + totalStats.selfRef0Bits + totalStats.selfRef1Bits + totalStats.selfRef2Bits + totalStats.dictSelfBits + totalStats.dictOtherBits
 	fmt.Printf("  total:             %5d  %6d bits  %5d bytes\n", totalCmds, totalBits, totalBits/8)
 	fmt.Printf("\nMax leading zeros in gamma: %d (terminator uses %d)\n", totalStats.maxGammaZeros, TerminatorZeros)
+	fmt.Printf("Max copy length: %d\n", totalStats.maxLength)
 	if totalStats.maxGammaZeros >= TerminatorZeros {
 		fmt.Fprintf(os.Stderr, "\nERROR: max gamma zeros (%d) >= terminator zeros (%d)\n", totalStats.maxGammaZeros, TerminatorZeros)
 		fmt.Fprintf(os.Stderr, "Increase TerminatorZeros in decompress6502.go to at least %d\n", totalStats.maxGammaZeros+1)
