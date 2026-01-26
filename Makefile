@@ -21,7 +21,7 @@ INCLUDES = $(wildcard src/*.inc)
 
 all: $(PRG) $(SID_FILE)
 
-$(OBJ): $(SRC) $(INCLUDES) generated/decompress.asm generated/stream_main.bin generated/stream_tail.bin
+$(OBJ): $(SRC) $(INCLUDES) generated/decompress.asm generated/part1.bin generated/stream_main.bin generated/stream_tail.bin
 	@mkdir -p build
 	$(ASM) -o $@ $<
 

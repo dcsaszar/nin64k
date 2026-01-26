@@ -76,6 +76,7 @@ basic_stub:
 ; ----------------------------------------------------------------------------
 start:
         jsr     init_game
+        lda     #1
         sta     zp_part_num
         jsr     setup_irq
         lda     #<msg_loading
@@ -84,8 +85,8 @@ start:
         sta     zp_msg_hi
         jsr     print_msg
         jsr     load_d0
-        jsr     load_and_init
-        inc     zp_part_num
+        lda     #$00
+        jsr     TUNE1_INIT
         lda     #<msg_title
         sta     zp_msg_lo
         lda     #>msg_title
@@ -493,21 +494,28 @@ part_times:
 
 ; ----------------------------------------------------------------------------
 load_d0:
-        jmp     load_d0_impl
+        jmp     init_stream
 
 ; ----------------------------------------------------------------------------
 load_tune:
         jmp     load_tune_impl
 
 ; ----------------------------------------------------------------------------
-; Initialize stream pointer for in-memory decompression
+; Initialize stream pointer to song 2 (song 1 is pre-decompressed at $1000)
+; Song 1 = 39981 bits = 4997 bytes + 5 bits, so song 2 starts mid-byte
 ; ----------------------------------------------------------------------------
-load_d0_impl:
-        lda     #<STREAM_MAIN_DEST
+init_stream:
+        lda     #<(STREAM_MAIN_DEST + 1)
         sta     zp_src_lo
-        lda     #>STREAM_MAIN_DEST
+        lda     #>(STREAM_MAIN_DEST + 1)
         sta     zp_src_hi
-        lda     #$80
+        lda     STREAM_MAIN_DEST
+        asl     a
+        asl     a
+        asl     a
+        asl     a
+        asl     a
+        ora     #$10
         sta     zp_bitbuf
         rts
 
@@ -557,9 +565,8 @@ load_tune_impl:
 .include "../generated/decompress.asm"
 
 ; ----------------------------------------------------------------------------
-; ----------------------------------------------------------------------------
 init_game:
-        jsr     copy_streams_banked ; Copy compressed data to safe location
+        jsr     copy_streams_banked
         lda     #$00
         sta     zp_selected         ; Auto-select part 1 (skip menu)
         sta     $D020
@@ -584,4 +591,9 @@ LFCD:
 init_timing_data:
 .include "part_times.inc"
 
+.segment "PART1"
+.incbin "../generated/part1.bin"
+
+.segment "DATA"
+STREAM_OFFSET = 4997
 .include "stream.inc"
