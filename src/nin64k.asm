@@ -277,7 +277,7 @@ init_stream:
 .include "odin_player.inc"
 
 .segment "PART1"
-.incbin "../generated/part1.bin"
+.incbin "../generated/parts/part1.bin"
 
 .segment "DATA"
 STREAM_OFFSET = 3026            ; Skip song 1's compressed data (pre-loaded from part1.bin)

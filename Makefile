@@ -21,7 +21,7 @@ INCLUDES = $(wildcard src/*.inc)
 
 all: $(PRG) $(SID_FILE)
 
-$(OBJ): $(SRC) $(INCLUDES) generated/decompress.asm generated/part1.bin generated/stream_main.bin generated/stream_tail.bin
+$(OBJ): $(SRC) $(INCLUDES) generated/decompress.asm generated/parts/part1.bin
 	@mkdir -p build
 	$(ASM) -o $@ $<
 
@@ -37,7 +37,7 @@ endif
 
 selftest: $(SELFTEST_PRG)
 
-$(SELFTEST_OBJ): $(SELFTEST_SRC) $(INCLUDES) generated/decompress.asm generated/stream_main.bin generated/stream_tail.bin
+$(SELFTEST_OBJ): $(SELFTEST_SRC) $(INCLUDES) generated/decompress.asm
 	@mkdir -p build
 	$(ASM) -o $@ $<
 
@@ -53,7 +53,7 @@ endif
 
 sid: $(SID_FILE)
 
-$(SID_OBJ): $(SID_SRC) $(INCLUDES) generated/decompress.asm generated/part1.bin generated/stream_main.bin generated/stream_tail.bin
+$(SID_OBJ): $(SID_SRC) $(INCLUDES) generated/decompress.asm generated/parts/part1.bin
 	@mkdir -p build
 	$(ASM) -o $@ $<
 
