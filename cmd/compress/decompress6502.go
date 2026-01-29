@@ -451,14 +451,14 @@ func GetDecompressorCodeWithLabels() ([]byte, map[string]int) {
 	// ==================== ENTRY ====================
 	label("decompress")
 	// Entry: zpOutLo/zpOutHi already set to target address
-	// Compute zpOtherDelta from zpOutHi (< $70 = odd buffer, >= $70 = even buffer)
-	// zpOtherDelta used with SBC (C=1): $A0 gives +$60, $60 gives -$60
+	// Compute zpOtherDelta from zpOutHi (< $68 = odd buffer at $1800, >= $68 = even buffer at $6800)
+	// zpOtherDelta used with SBC (C=1): $B0 gives +$50, $50 gives -$50
 	emit(0xA0, 0x00)         // LDY #0 (Y stays 0 throughout)
 	emit(0xA5, zpOutHi)      // LDA zpOutHi
-	emit(0xC9, 0x70)         // CMP #$70
-	emit(0xA9, 0xA0)         // LDA #$A0 (odd buffer delta)
-	emit(0x90, 0x02)         // BCC +2 (if < $70, keep $A0)
-	emit(0xA9, 0x60)         // LDA #$60 (even buffer delta)
+	emit(0xC9, 0x68)         // CMP #$68
+	emit(0xA9, 0xB0)         // LDA #$B0 (odd buffer delta: +$50 via SBC)
+	emit(0x90, 0x02)         // BCC +2 (if < $68, keep $B0)
+	emit(0xA9, 0x50)         // LDA #$50 (even buffer delta: -$50 via SBC)
 	label("store_delta")
 	emit(0x85, zpOtherDelta) // STA zpOtherDelta
 
@@ -536,10 +536,10 @@ func GetDecompressorCodeWithLabels() ([]byte, map[string]int) {
 
 	storeAndCheckPos := label("store_and_check")
 	patchRel(bccStoreAndCheck, storeAndCheckPos)
-	emit(0xC9, 0xD0) // CMP #$D0
+	emit(0xC9, 0xB8) // CMP #$B8 (above buffer B end at $B7FF?)
 	bccNoHighWrap := pos()
 	emit(0x90, 0x00) // BCC @no_high_wrap
-	emit(0xE9, 0xC0) // SBC #$C0
+	emit(0xE9, 0xA0) // SBC #$A0 (wrap by total span)
 	noHighWrapPos := label("no_high_wrap")
 	patchRel(bccNoHighWrap, noHighWrapPos)
 	bneFwdrefToCopy := pos()
@@ -588,12 +588,12 @@ func GetDecompressorCodeWithLabels() ([]byte, map[string]int) {
 	emit(0xE5, zpValHi) // SBC zpValHi
 	bccNeedAdjust := pos()
 	emit(0x90, 0x00) // BCC need_adjust (borrow means dist > dst)
-	emit(0xC9, 0x10) // CMP #$10
+	emit(0xC9, 0x18) // CMP #$18 (below buffer A start at $1800?)
 	bcsNoAdjust := pos()
-	emit(0xB0, 0x00) // BCS no_adjust (address >= $1000 is valid)
+	emit(0xB0, 0x00) // BCS no_adjust (address >= $1800 is valid)
 	needAdjustPos := label("backref_adjust")
 	patchRel(bccNeedAdjust, needAdjustPos)
-	emit(0x69, 0xC0) // ADC #$C0 (convert to otherDict address, C=0)
+	emit(0x69, 0xA0) // ADC #$A0 (wrap by total span, C=0)
 	backrefNoAdjustPos := label("backref_no_adjust")
 	patchRel(bcsNoAdjust, backrefNoAdjustPos)
 	patchRel(bneFwdrefToCopy, backrefNoAdjustPos)

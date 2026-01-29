@@ -23,8 +23,8 @@
 ;   zp_part_num - Current part number (1-9)
 ;
 ; Tune buffers:
-;   $1000 - Buffer 1 (odd parts: 1,3,5,7,9)
-;   $7000 - Buffer 2 (even parts: 2,4,6,8)
+;   $1800 - Buffer 1 (odd parts: 1,3,5,7,9)
+;   $6800 - Buffer 2 (even parts: 2,4,6,8)
 ;
 ; ============================================================================
 
@@ -74,19 +74,9 @@ GETIN           = $FFE4
 CHROUT          = $FFD2
 IRQ_RETURN      = $EA31
 
-; Tune entry points (jump vectors copied here)
-TUNE1_BASE      = $1000
-TUNE1_INIT      = $1000
-TUNE1_PLAY      = $1003
-TUNE2_BASE      = $7000
-TUNE2_INIT      = $7000
-TUNE2_PLAY      = $7003
-
-; Player code starts at $1009/$7009, data at $198C/$798C
-TUNE1_PLAYER    = $1009
-TUNE1_DATA      = $198C
-TUNE2_PLAYER    = $7009
-TUNE2_DATA      = $798C
+; Buffer destinations for decompressed parts (new format: data only, no embedded player)
+TUNE1_BASE      = $1800
+TUNE2_BASE      = $6800
 
 .segment "LOADADDR"
         .word   $0801
@@ -207,15 +197,8 @@ skip_play:
 
 ; ----------------------------------------------------------------------------
 play_tick:
-        lda     zp_part_num
-        and     #$01
-        beq     play_buffer_b
-        jsr     $1003
-        jmp     check_countdown
-
-; ----------------------------------------------------------------------------
-play_buffer_b:
-        jsr     $7003
+        jsr     player_play
+        rts
 
 ; ----------------------------------------------------------------------------
 check_countdown:
@@ -297,10 +280,10 @@ selftest_output_checksum:
         lda     zp_song_idx
         and     #$01
         bne     @out_odd
-        lda     #$10
+        lda     #$18                ; Even index (0,2,4,6,8) -> $1800
         bne     @out_set
 @out_odd:
-        lda     #$70
+        lda     #$68                ; Odd index (1,3,5,7) -> $6800
 @out_set:
         sta     zp_ptr_hi
         lda     #$00
@@ -343,116 +326,56 @@ calc_checksum:
         rts
 
 ; ----------------------------------------------------------------------
-; Verify stream_main checksum (placed here to stay below $1000)
+; Verify stream checksum (single stream)
 ; ----------------------------------------------------------------------
-selftest_verify_main:
+selftest_verify_stream:
         ldy     #0
-        lda     #char_m
+        lda     #char_s
         sta     (zp_screen_lo),y
         iny
-        lda     #char_a
-        sta     (zp_screen_lo),y
-        iny
-        lda     #char_i
-        sta     (zp_screen_lo),y
-        iny
-        lda     #char_n
-        sta     (zp_screen_lo),y
-        iny
-        lda     #char_colon
-        sta     (zp_screen_lo),y
-        iny
-        sty     zp_copy_rem
-        lda     #<STREAM_MAIN_DEST
-        sta     zp_ptr_lo
-        lda     #>STREAM_MAIN_DEST
-        sta     zp_ptr_hi
-        lda     #<STREAM_MAIN_SIZE
-        sta     zp_size_lo
-        lda     #>STREAM_MAIN_SIZE
-        sta     zp_size_hi
-        jsr     calc_checksum
-        lda     zp_csum_lo
-        cmp     selftest_stream_main_csum
-        bne     @fail_main
-        lda     zp_csum_hi
-        cmp     selftest_stream_main_csum+1
-        bne     @fail_main
-        ldy     zp_copy_rem
-        lda     #char_o
-        sta     (zp_screen_lo),y
-        iny
-        lda     #char_k
-        sta     (zp_screen_lo),y
-        jmp     @done_main
-@fail_main:
-        ldy     zp_copy_rem
-        jsr     print_hex_word
-@done_main:
-        lda     zp_screen_lo
-        clc
-        adc     #40
-        sta     zp_screen_lo
-        bcc     @nc_m
-        inc     zp_screen_hi
-@nc_m:  rts
-
-; ----------------------------------------------------------------------
-; Verify stream_tail checksum
-; ----------------------------------------------------------------------
-selftest_verify_tail:
-        ldy     #0
         lda     #char_t
         sta     (zp_screen_lo),y
         iny
-        lda     #char_a
-        sta     (zp_screen_lo),y
-        iny
-        lda     #char_i
-        sta     (zp_screen_lo),y
-        iny
-        lda     #char_l
+        lda     #char_r
         sta     (zp_screen_lo),y
         iny
         lda     #char_colon
         sta     (zp_screen_lo),y
         iny
         sty     zp_copy_rem
-        lda     #<STREAM_TAIL_DEST
+        lda     #<STREAM_DEST
         sta     zp_ptr_lo
-        lda     #>STREAM_TAIL_DEST
+        lda     #>STREAM_DEST
         sta     zp_ptr_hi
-        lda     #<STREAM_TAIL_SIZE
+        lda     #<STREAM_SIZE
         sta     zp_size_lo
-        lda     #>STREAM_TAIL_SIZE
+        lda     #>STREAM_SIZE
         sta     zp_size_hi
-        sei
         jsr     calc_checksum
-        cli
         lda     zp_csum_lo
-        cmp     selftest_stream_tail_csum
-        bne     @fail_tail
+        cmp     selftest_stream_csum
+        bne     @fail_stream
         lda     zp_csum_hi
-        cmp     selftest_stream_tail_csum+1
-        bne     @fail_tail
+        cmp     selftest_stream_csum+1
+        bne     @fail_stream
         ldy     zp_copy_rem
         lda     #char_o
         sta     (zp_screen_lo),y
         iny
         lda     #char_k
         sta     (zp_screen_lo),y
-        jmp     @done_tail
-@fail_tail:
+        jmp     @done_stream
+@fail_stream:
         ldy     zp_copy_rem
         jsr     print_hex_word
-@done_tail:
+@done_stream:
         lda     zp_screen_lo
         clc
         adc     #40
         sta     zp_screen_lo
-        bcc     @nc_t
+        bcc     @nc_s
         inc     zp_screen_hi
-@nc_t:  rts
+@nc_s:  rts
 
 ; ----------------------------------------------------------------------------
 clear_screen:
@@ -600,22 +523,20 @@ L9BC:
         bne     init_buf2
 
 ; ----------------------------------------------------------------------------
-; init_buf1: Called for EVEN $7B (0,2,4,6,8) → loads ODD files to $1000
+; init_buf1: Called for EVEN part num (2,4,6,8) → even songs to $6800
 init_buf1:
-        lda     #$60
-        sta     $105C               ; Patch stop routine
         lda     #$00
-        jsr     TUNE1_INIT
+        ldx     #$68
+        jsr     player_init
 load_done:
         rts
 
 ; ----------------------------------------------------------------------------
-; init_buf2: Called for ODD $7B (1,3,5,7) → loads EVEN files to $7000
+; init_buf2: Called for ODD part num (1,3,5,7,9) → odd songs to $1800
 init_buf2:
-        lda     #$60
-        sta     $705C               ; Patch stop routine
         lda     #$00
-        jsr     TUNE2_INIT
+        ldx     #$18
+        jsr     player_init
         jmp     load_done
 
 ; ----------------------------------------------------------------------------
@@ -667,9 +588,9 @@ load_tune:
 ; Initialize stream pointer for in-memory decompression
 ; ----------------------------------------------------------------------------
 init_stream:
-        lda     #<STREAM_MAIN_DEST
+        lda     #<STREAM_DEST
         sta     zp_src_lo
-        lda     #>STREAM_MAIN_DEST
+        lda     #>STREAM_DEST
         sta     zp_src_hi
         lda     #$80
         sta     zp_bitbuf
@@ -687,10 +608,10 @@ load_tune_impl:
         lda     zp_part_num
         and     #$01
         beq     @even_part
-        lda     #$70                ; Odd part num -> $7000
+        lda     #$18                ; Odd part num (1,3,5,7,9) -> $1800
         bne     @do_decompress
 @even_part:
-        lda     #$10                ; Even part num -> $1000
+        lda     #$68                ; Even part num (2,4,6,8) -> $6800
 @do_decompress:
         sta     zp_out_hi
         ; Call decompressor (reads from zp_src, writes to zp_out)
@@ -701,11 +622,16 @@ load_tune_impl:
 
 ; ============================================================================
 ; V23 Decompressor - generated by ./compress
-; Setup: zp_src, zp_bitbuf=$80, zp_out ($1000 or $7000)
+; Setup: zp_src, zp_bitbuf=$80, zp_out ($1800 or $6800)
 ; ============================================================================
 checkpoint:
         rts
 .include "../generated/decompress.asm"
+
+; ============================================================================
+; Standalone player (new format)
+; ============================================================================
+.include "odin_player.inc"
 
 ; ----------------------------------------------------------------------------
 ; ----------------------------------------------------------------------------
@@ -740,31 +666,30 @@ init_timing_data:
 
 ; Expected checksums for decompressed songs 1-9 (16-bit additive)
 selftest_checksums:
-        .word   $4541               ; Song 1
-        .word   $A9C7               ; Song 2
-        .word   $656A               ; Song 3
-        .word   $01F5               ; Song 4
-        .word   $D543               ; Song 5
-        .word   $8757               ; Song 6
-        .word   $8831               ; Song 7
-        .word   $D3DB               ; Song 8
-        .word   $4724               ; Song 9
+        .word   $8F57               ; Song 1
+        .word   $09AC               ; Song 2
+        .word   $31E7               ; Song 3
+        .word   $83F9               ; Song 4
+        .word   $9A93               ; Song 5
+        .word   $66E8               ; Song 6
+        .word   $44B1               ; Song 7
+        .word   $7207               ; Song 8
+        .word   $F78D               ; Song 9
 
 ; Song sizes in bytes (songs 1-9)
 selftest_sizes:
-        .word   21085               ; Song 1
-        .word   21375               ; Song 2
-        .word   19464               ; Song 3
-        .word   22889               ; Song 4
-        .word   22075               ; Song 5
-        .word   20300               ; Song 6
-        .word   14423               ; Song 7
-        .word   20707               ; Song 8
-        .word   21620               ; Song 9
+        .word   17113               ; Song 1
+        .word   18265               ; Song 2
+        .word   16537               ; Song 3
+        .word   19993               ; Song 4
+        .word   18649               ; Song 5
+        .word   17305               ; Song 6
+        .word   11353               ; Song 7
+        .word   17305               ; Song 8
+        .word   19033               ; Song 9
 
 ; Expected stream checksums
-selftest_stream_main_csum:  .word $FFE8
-selftest_stream_tail_csum:  .word $4D99
+selftest_stream_csum:  .word $16E8
 
 ; Screen codes for display
 char_0          = $30
@@ -826,10 +751,8 @@ selftest:
         lda     #>($0400 + 80)
         sta     zp_screen_hi
 
-        ; Verify stream_main checksum
-        jsr     selftest_verify_main
-        ; Verify stream_tail checksum
-        jsr     selftest_verify_tail
+        ; Verify stream checksum
+        jsr     selftest_verify_stream
 
         ; Set screen position for song results (row 4)
         lda     #<($0400 + 160)
@@ -860,33 +783,22 @@ selftest:
         sty     zp_copy_rem
 
         ; Set output destination based on song index
+        ; Even index (0,2,4,6,8) = odd songs (1,3,5,7,9) -> $1800
+        ; Odd index (1,3,5,7) = even songs (2,4,6,8) -> $6800
         lda     #$00
         sta     zp_out_lo
         lda     zp_song_idx
         and     #$01
-        bne     @odd_song
-        lda     #$10                ; Even index (0,2,4,6,8) -> $1000
+        bne     @odd_idx
+        lda     #$18                ; Even index -> odd songs -> $1800
         bne     @set_dest
-@odd_song:
-        lda     #$70                ; Odd index (1,3,5,7) -> $7000
+@odd_idx:
+        lda     #$68                ; Odd index -> even songs -> $6800
 @set_dest:
         sta     zp_out_hi
 
-        ; Decompress (stream spans $D000, need all-RAM mode)
+        ; Decompress (single stream, no split)
         jsr     decompress
-        ; S9 is split: stream_main has first part, stream_tail has rest
-        lda     zp_song_idx
-        cmp     #8                  ; Song 9 = index 8
-        bne     @not_s9
-        ; Switch to stream_tail and continue decompressing
-        lda     #<STREAM_TAIL_DEST
-        sta     zp_src_lo
-        lda     #>STREAM_TAIL_DEST
-        sta     zp_src_hi
-        lda     #$80
-        sta     zp_bitbuf
-        jsr     decompress
-@not_s9:
 
         ; Calculate checksum of output
         jsr     selftest_output_checksum
@@ -907,13 +819,13 @@ selftest:
         lda     zp_song_idx
         and     #$01
         bne     @init_odd
-        lda     #$00
-        jsr     TUNE1_INIT
-        jmp     @init_done
+        ldx     #$18                ; Even index -> odd songs -> buffer $1800
+        bne     @init_player
 @init_odd:
+        ldx     #$68                ; Odd index -> even songs -> buffer $6800
+@init_player:
         lda     #$00
-        jsr     TUNE2_INIT
-@init_done:
+        jsr     player_init
 
         lda     zp_song_idx
         clc

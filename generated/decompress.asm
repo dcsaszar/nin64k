@@ -21,10 +21,10 @@ zp_caller_x     = $0C
 .proc decompress
         ldy     #$00
         lda     zp_out_hi
-        cmp     #$70
-        lda     #$A0
+        cmp     #$68
+        lda     #$B0
         bcc     store_delta
-        lda     #$60
+        lda     #$50
 store_delta:
         sta     zp_other_delta
 main_loop:
@@ -61,9 +61,9 @@ fwdref:
         bcc     store_and_check
         sbc     zp_other_delta
 store_and_check:
-        cmp     #$D0
+        cmp     #$B8
         bcc     no_high_wrap
-        sbc     #$C0
+        sbc     #$A0
 no_high_wrap:
         bne     backref_no_adjust
 set_x3:
@@ -94,10 +94,10 @@ backref_common:
         lda     zp_out_hi
         sbc     zp_val_hi
         bcc     backref_adjust
-        cmp     #$10
+        cmp     #$18
         bcs     backref_no_adjust
 backref_adjust:
-        adc     #$C0
+        adc     #$A0
 backref_no_adjust:
         sta     zp_ref_hi
         jsr     read_expgol

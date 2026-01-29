@@ -14,10 +14,10 @@ const (
 	kDist   = 2
 	kOffset = 2
 
-	// Memory regions on NES
-	addrLow    = 0x1000 // $1000-$6FFF - odd songs (S1, S3, S5, S7, S9)
-	addrHigh   = 0x7000 // $7000-$BFFF - even songs (S2, S4, S6, S8)
-	bufferSize = 0x6000 // 24KB per buffer
+	// Memory regions on C64 (back-to-back buffers)
+	addrLow    = 0x1800 // $1800-$67FF - odd songs (S1, S3, S5, S7, S9)
+	addrHigh   = 0x6800 // $6800-$B7FF - even songs (S2, S4, S6, S8)
+	bufferSize = 0x5000 // 20KB per buffer (enough for largest song ~20KB)
 )
 
 var (
@@ -616,8 +616,8 @@ func decompress(compressed, selfDict, otherDict []byte, expectedLen int) []byte 
 	output := make([]byte, 0, expectedLen)
 	otherLen := len(otherDict)
 
-	// Memory layout: selfDict at $1000, otherDict at $7000
-	const otherBase = 24576 // $6000
+	// Memory layout: selfDict at $1800, otherDict at $6800 (gap = $5000)
+	const otherBase = 0x5000
 
 	// Backref byte access: at position pos with distance d
 	getBackrefByte := func(pos, d int) byte {
@@ -771,12 +771,11 @@ func main() {
 		loadWg.Add(1)
 		go func(idx int) {
 			defer loadWg.Done()
-			data, err := os.ReadFile(filepath.Join("uncompressed", fmt.Sprintf("d%dp.raw", idx)))
+			data, err := os.ReadFile(filepath.Join("generated", "parts", fmt.Sprintf("part%d.bin", idx)))
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "Error reading song %d: %v\n", idx, err)
+				fmt.Fprintf(os.Stderr, "Error reading part %d: %v\n", idx, err)
 				os.Exit(1)
 			}
-			normalizeSong(data)
 			loadMu.Lock()
 			songs[idx] = data
 			loadMu.Unlock()
@@ -1019,92 +1018,13 @@ func main() {
 	os.WriteFile(concatPath, w.data, 0644)
 	fmt.Printf("\nConcatenated bitstream: %d bits (%d bytes) -> %s\n", w.totalBits(), len(w.data), concatPath)
 
-	// Split concatenated stream into main + tail (2,501 bytes)
-	// Find command boundary in S9 where ~2501 bytes remain
-	const tailTargetBytes = 2501
-	s9Bits := resultMap[9].bitCount
-
-	// Find command boundary by parsing S9's bitstream
-	s9Data := resultMap[9].compressed
-	reader := &bitReader{data: s9Data}
-	var cmdBoundaries []int // bit positions where commands start
-	cmdBoundaries = append(cmdBoundaries, 0)
-
-	for reader.bytePos*8+reader.bitPos < s9Bits-13 { // -13 for terminator
-		startBit := reader.bytePos*8 + reader.bitPos
-		if reader.readBit() == 0 {
-			d := reader.readExpGolomb(kDist)
-			if d >= 16380 {
-				break // terminator
-			}
-			reader.readExpGolomb(kLen)
-		} else if reader.readBit() == 0 {
-			reader.readBits(8)
-		} else if reader.readBit() == 0 {
-			reader.readExpGolomb(kDist)
-			reader.readExpGolomb(kLen)
-		} else if reader.readBit() == 0 {
-			reader.readExpGolomb(kOffset)
-			reader.readExpGolomb(kLen)
-		} else if reader.readBit() == 0 {
-			reader.readExpGolomb(kDist)
-			reader.readExpGolomb(kLen)
-		} else {
-			reader.readExpGolomb(kOffset)
-			reader.readExpGolomb(kLen)
-		}
-		cmdBoundaries = append(cmdBoundaries, reader.bytePos*8+reader.bitPos)
-		_ = startBit
-	}
-
-	// Find earliest boundary that ensures tail fits in tailTargetBytes after byte padding
-	// This maximizes tail usage while staying within the limit.
-	// tail bytes = ceil((s9Bits - boundary) / 8)
-	// We need: (s9Bits - boundary + 7) / 8 <= tailTargetBytes
-	bestBoundary := 0
-	for _, boundary := range cmdBoundaries {
-		tailBits := s9Bits - boundary
-		tailBytes := (tailBits + 7) / 8
-		if tailBytes <= tailTargetBytes {
-			bestBoundary = boundary
-			break // Take the first (earliest) valid boundary
-		}
-	}
-
-	// Calculate bits before S9 in concatenated stream
-	bitsBeforeS9 := 0
-	for song := 1; song <= 8; song++ {
-		bitsBeforeS9 += resultMap[song].bitCount
-	}
-
-	// Build main stream: S1-S8 + S9[0:boundary] + terminator
-	mainWriter := &bitWriter{}
-	for song := 1; song <= 8; song++ {
-		r := resultMap[song]
-		mainWriter.copyBits(r.compressed, r.bitCount)
-	}
-	mainWriter.copyBits(s9Data, bestBoundary)
-	mainWriter.writeBits(0b0, 1)  // terminator prefix
-	mainWriter.writeBits(0, 12)   // terminator signal
-	mainWriter.padToByte()
-
-	// Build tail stream: S9[boundary:end] (already has terminator)
-	tailWriter := &bitWriter{}
-	tailReader := &bitReader{data: s9Data, bytePos: bestBoundary / 8, bitPos: bestBoundary % 8}
-	tailBits := s9Bits - bestBoundary
-	for i := 0; i < tailBits; i++ {
-		tailWriter.writeBits(tailReader.readBit(), 1)
-	}
-	tailWriter.padToByte()
-
-	mainPath := filepath.Join("generated", "stream_main.bin")
-	tailPath := filepath.Join("generated", "stream_tail.bin")
+	// Single stream output (no split - rely on sequential decompression)
+	streamPath := filepath.Join("generated", "stream.bin")
 	asmPath := filepath.Join("generated", "decompress.asm")
-	os.WriteFile(mainPath, mainWriter.data, 0644)
-	os.WriteFile(tailPath, tailWriter.data, 0644)
+	os.WriteFile(streamPath, w.data, 0644)
 
 	// Run VM to get cycle stats for ASM generation
-	cycleStats, err := RunDecompressorForCycleStats(songs, mainWriter.data, tailWriter.data)
+	cycleStats, err := RunDecompressorForCycleStats(songs, w.data, nil)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Warning: could not get cycle stats: %v\n", err)
 		WriteDecompressorAsm(asmPath)
@@ -1114,10 +1034,7 @@ func main() {
 			cycleStats.LowestMaxGapOffset, cycleStats.MaxCycleGap)
 	}
 
-	fmt.Printf("\nSplit stream: main %d bytes + tail %d bytes (target tail: %d)\n",
-		len(mainWriter.data), len(tailWriter.data), tailTargetBytes)
-	fmt.Printf("  S9 split at command boundary: bit %d of %d (%d bytes into S9)\n",
-		bestBoundary, s9Bits, bestBoundary/8)
+	fmt.Printf("\nStream: %d bytes -> %s\n", len(w.data), streamPath)
 
 	// Also generate part 1 raw for SID export (pre-decompressed at $1000)
 	part1Path := filepath.Join("generated", "part1.bin")
@@ -1141,15 +1058,10 @@ func main() {
 		}
 		fmt.Printf("        .word   $%04X               ; Song %d\n", csum, song)
 	}
-	fmt.Println("\nStream checksums:")
-	var mainCsum uint16
-	for _, b := range mainWriter.data {
-		mainCsum += uint16(b)
+	fmt.Println("\nStream checksum:")
+	var streamCsum uint16
+	for _, b := range w.data {
+		streamCsum += uint16(b)
 	}
-	var tailCsum uint16
-	for _, b := range tailWriter.data {
-		tailCsum += uint16(b)
-	}
-	fmt.Printf("selftest_stream_main_csum:  .word $%04X\n", mainCsum)
-	fmt.Printf("selftest_stream_tail_csum:  .word $%04X\n", tailCsum)
+	fmt.Printf("selftest_stream_csum:  .word $%04X\n", streamCsum)
 }

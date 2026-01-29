@@ -537,9 +537,21 @@ func convertToNewFormat(raw []byte) ([]byte, ConversionStats) {
 
 	// Deduplicate patterns by content
 	// Map content hash to canonical address, and address to canonical address
+	// Sort addresses first for deterministic output
+	var sortedPatternAddrs []uint16
+	for addr := range patternAddrs {
+		sortedPatternAddrs = append(sortedPatternAddrs, addr)
+	}
+	for i := 0; i < len(sortedPatternAddrs)-1; i++ {
+		for j := i + 1; j < len(sortedPatternAddrs); j++ {
+			if sortedPatternAddrs[j] < sortedPatternAddrs[i] {
+				sortedPatternAddrs[i], sortedPatternAddrs[j] = sortedPatternAddrs[j], sortedPatternAddrs[i]
+			}
+		}
+	}
 	contentToCanonical := make(map[string]uint16)
 	addrToCanonical := make(map[uint16]uint16)
-	for addr := range patternAddrs {
+	for _, addr := range sortedPatternAddrs {
 		srcOff := int(addr) - baseAddr
 		content := string(raw[srcOff : srcOff+192])
 		if canonical, exists := contentToCanonical[content]; exists {

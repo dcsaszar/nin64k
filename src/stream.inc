@@ -1,10 +1,10 @@
 ; ============================================================================
-; Stream data and copy routines - shared across all builds
+; Stream data and copy routine - single stream version
 ; ============================================================================
 ;
 ; Exports:
 ;   copy_streams, copy_bytes_bwd
-;   STREAM_MAIN_DEST, STREAM_TAIL_DEST, STREAM_MAIN_SIZE, STREAM_TAIL_SIZE
+;   STREAM_DEST, STREAM_SIZE
 ;
 ; ============================================================================
 
@@ -23,43 +23,26 @@ zp_copy_dst_hi  = $06
 ; ----------------------------------------------------------------------
 ; Size and destination calculations (forward references to labels below)
 ; ----------------------------------------------------------------------
-STREAM_TAIL_SIZE = stream_main - stream_tail
-STREAM_MAIN_SIZE = stream_end - stream_main
+STREAM_SIZE = stream_end - stream_data
 
-; stream_main goes to high memory (ends at $FFFD, leaving $FFFE-$FFFF for IRQ vector)
-STREAM_MAIN_DEST = $10000 - STREAM_MAIN_SIZE - 2
-; stream_tail goes to buffer A tail (largest odd song S5 ends at $663A)
-STREAM_TAIL_DEST = $663B
+; Stream goes to high memory (ends at $FFFD, leaving $FFFE-$FFFF for IRQ vector)
+STREAM_DEST = $10000 - STREAM_SIZE - 2
 
 ; ----------------------------------------------------------------------
-; Copy compressed streams to destinations for in-place decompression
-; stream_main -> high memory (under ROMs)
-; stream_tail -> $663B-$6FFF (buffer A tail)
+; Copy compressed stream to destination for in-place decompression
+; stream_data -> high memory (under ROMs)
 ; ----------------------------------------------------------------------
 copy_streams:
-        lda     #<stream_main
+        lda     #<stream_data
         sta     zp_copy_src_lo
-        lda     #>stream_main
+        lda     #>stream_data
         sta     zp_copy_src_hi
-        lda     #<STREAM_MAIN_DEST
+        lda     #<STREAM_DEST
         sta     zp_copy_dst_lo
-        lda     #>STREAM_MAIN_DEST
+        lda     #>STREAM_DEST
         sta     zp_copy_dst_hi
-        ldx     #>STREAM_MAIN_SIZE
-        lda     #<STREAM_MAIN_SIZE
-        sta     zp_copy_rem
-        jsr     copy_bytes_bwd
-
-        lda     #<stream_tail
-        sta     zp_copy_src_lo
-        lda     #>stream_tail
-        sta     zp_copy_src_hi
-        lda     #<STREAM_TAIL_DEST
-        sta     zp_copy_dst_lo
-        lda     #>STREAM_TAIL_DEST
-        sta     zp_copy_dst_hi
-        ldx     #>STREAM_TAIL_SIZE
-        lda     #<STREAM_TAIL_SIZE
+        ldx     #>STREAM_SIZE
+        lda     #<STREAM_SIZE
         sta     zp_copy_rem
         jmp     copy_bytes_bwd
 
@@ -105,13 +88,11 @@ copy_bytes_bwd:
         rts
 
 ; ----------------------------------------------------------------------
-; Compressed stream data (tail before main for consistent copy direction)
+; Compressed stream data
 ; ----------------------------------------------------------------------
-stream_tail:
-        .incbin "../generated/stream_tail.bin"
-stream_main:
+stream_data:
 .ifndef STREAM_OFFSET
     STREAM_OFFSET = 0
 .endif
-        .incbin "../generated/stream_main.bin", STREAM_OFFSET
+        .incbin "../generated/stream.bin", STREAM_OFFSET
 stream_end:
