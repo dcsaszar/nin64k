@@ -38,6 +38,24 @@ zp_decode_dst    = $7C          ; 2 bytes: decode dest pointer (temp)
 ;     $E0-$FE: RLE repeat previous row 1-31 times
 ;     $FF + byte: extended dictionary index (224 + byte)
 ;   Each pattern decodes to 64 rows × 3 bytes = 192 bytes
+;
+; Row format (3 bytes):
+;   Byte 0 (Note):    e nnn nnnn    e=effect bit 3, n=note value (0-96, $61=off)
+;   Byte 1 (InstEff): EEE iiiii    E=effect bits 0-2, i=instrument (0-31)
+;   Byte 2 (Param):   pppp pppp    p=effect parameter
+;
+;   Note values: $00=none, $01-$60=note 0-95 (subtract 1), $61=note-off
+;   Effect = (InstEff >> 5) | ((Note >> 4) & $08)
+;
+; Effect mapping (1-C, 0=none):
+;   1=slide     2=pulse    3=porta    4=vibrato   5=AD    6=SR
+;   7=waveform  8=arpeggio 9=jump     A=break     B=reso  C=Fxx
+;
+; Example: $80 $00 $49
+;   Note=$80:    note = $80 & $7F = 0 (none), effect bit 3 = 1
+;   InstEff=$00: inst = 0, effect bits 0-2 = 0
+;   Param=$49:   parameter = $49
+;   -> effect = (0>>5) | (($80>>4)&8) = 0 | 8 = 8 (arpeggio $49)
 
 ; Pattern packing constants
 ROW_DICT_OFF        = $9D9
