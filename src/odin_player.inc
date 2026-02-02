@@ -47,15 +47,15 @@ zp_decode_dst    = $7C          ; 2 bytes: decode dest pointer (temp)
 ;   Note values: $00=none, $01-$60=note 0-95 (subtract 1), $61=note-off
 ;   Effect = (InstEff >> 5) | ((Note >> 4) & $08)
 ;
-; Effect mapping (1-C, 0=none):
-;   1=slide     2=pulse    3=porta    4=vibrato   5=AD    6=SR
-;   7=waveform  8=arpeggio 9=jump     A=break     B=reso  C=Fxx
+; Effect mapping (1-C frequency-sorted, 0=none, B-C=position-altering):
+;   1=arpeggio  2=porta    3=Fxx      4=SR        5=waveform 6=slidedn
+;   7=AD        8=reso     9=slideup  A=vibrato   B=break    C=jump
 ;
-; Example: $80 $00 $49
-;   Note=$80:    note = $80 & $7F = 0 (none), effect bit 3 = 1
-;   InstEff=$00: inst = 0, effect bits 0-2 = 0
+; Example: $00 $20 $49
+;   Note=$00:    note = $00 & $7F = 0 (none), effect bit 3 = 0
+;   InstEff=$20: inst = 0, effect bits 0-2 = 1
 ;   Param=$49:   parameter = $49
-;   -> effect = (0>>5) | (($80>>4)&8) = 0 | 8 = 8 (arpeggio $49)
+;   -> effect = (1<<5>>5) | (($00>>4)&8) = 1 | 0 = 1 (arpeggio $49)
 
 ; Pattern packing constants
 ROW_DICT_OFF        = $9D9
@@ -395,7 +395,7 @@ check_hardrestart:
         lda     (zp_trackptr),y
         dey
         and     #$e0
-        cmp     #$60
+        cmp     #$40              ; tone portamento (new effect 2 = bits 0-2 = 2 = 0x40 >> 5)
         beq     @done
 @do_hr:
         lda     #$00
@@ -436,7 +436,7 @@ pi_waveset:
         sta     chn_waveidx,x
 
         lda     chn_effect,x
-        cmp     #$03
+        cmp     #$02              ; tone portamento (old effect 3 -> new effect 2)
         beq     pi_skiparp
         ldy     chn_arpidx,x
 arp_load_addr = *+1
@@ -689,7 +689,7 @@ fetch_channel_row:
         sbc     #$01
         sta     chn_note,x
         ldy     chn_effect,x
-        cpy     #$03
+        cpy     #$02              ; tone portamento (old effect 3 -> new effect 2)
         bne     @notporta
         clc
         adc     chn_transpose,x
@@ -738,7 +738,7 @@ set_pulse_width:
         rts
 
 ; ============================================================================
-; Effects (remapped: 1,2,3,4,7,8,9,A,B,D,E,F -> 1-C)
+; Effects (frequency-sorted: A,3,F,8,9,2,7,E,1,4,D,B -> 1-C)
 ; ============================================================================
 
 effect01:
@@ -1176,21 +1176,21 @@ filter_load:
 ; Tables
 ; ============================================================================
 
-; Effect table - remapped for compactness (indexed from 1)
-; 1-C map to old effects: 1,2,3,4,7,8,9,A,B,D,E,F
+; Effect table - frequency-sorted (most used first), indexed from 1
+; 1-C map to old effects: A,3,F,8,9,2,7,E,1,4,D,B
 effectptrs:
-        .word   effect01      ; 1 = old 1 (portamento up)
-        .word   effect02      ; 2 = old 2 (portamento down)
-        .word   effect03      ; 3 = old 3 (tone portamento)
-        .word   effect04      ; 4 = old 4 (vibrato)
-        .word   effect07      ; 5 = old 7 (set AD)
-        .word   effect08      ; 6 = old 8 (set SR)
-        .word   effect09      ; 7 = old 9 (set waveform)
-        .word   effect0a      ; 8 = old A (arpeggio)
-        .word   effect0b      ; 9 = old B (position jump)
-        .word   effect0d      ; A = old D (pattern break)
-        .word   effect0e      ; B = old E (set filter resonance)
-        .word   effect0f      ; C = old F (extended effects)
+        .word   effect0a      ; 1 = old A (arpeggio) - 3483 uses
+        .word   effect03      ; 2 = old 3 (tone portamento) - 3037 uses
+        .word   effect0f      ; 3 = old F (extended effects) - 3036 uses
+        .word   effect08      ; 4 = old 8 (set SR) - 446 uses
+        .word   effect09      ; 5 = old 9 (set waveform) - 387 uses
+        .word   effect02      ; 6 = old 2 (portamento down) - 312 uses
+        .word   effect07      ; 7 = old 7 (set AD) - 219 uses
+        .word   effect0e      ; 8 = old E (set filter resonance) - 109 uses
+        .word   effect01      ; 9 = old 1 (portamento up) - 96 uses
+        .word   effect04      ; A = old 4 (vibrato) - 64 uses
+        .word   effect0d      ; B = old D (pattern break) - 19 uses
+        .word   effect0b      ; C = old B (position jump) - 4 uses
 
 sidregoffs:
         .byte   0, 7, 14

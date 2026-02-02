@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"sync"
 )
 
@@ -237,6 +238,48 @@ func analyzeEffects(raw []byte) (uint16, uint16) {
 		}
 	}
 	return usedEffects, fSubEffects
+}
+
+// countEffectUsage returns counts of each effect (0-15) across all patterns
+func countEffectUsage(raw []byte) [16]int {
+	var counts [16]int
+	baseAddr := int(raw[2]) << 8
+	trackLo0Off := int(readWord(raw, codeTrackLo0)) - baseAddr
+	trackHi0Off := int(readWord(raw, codeTrackHi0)) - baseAddr
+	trackLo1Off := int(readWord(raw, codeTrackLo1)) - baseAddr
+	trackHi1Off := int(readWord(raw, codeTrackHi1)) - baseAddr
+	trackLo2Off := int(readWord(raw, codeTrackLo2)) - baseAddr
+	trackHi2Off := int(readWord(raw, codeTrackHi2)) - baseAddr
+	trackLoOff := []int{trackLo0Off, trackLo1Off, trackLo2Off}
+	trackHiOff := []int{trackHi0Off, trackHi1Off, trackHi2Off}
+
+	patternAddrs := make(map[uint16]bool)
+	for order := 0; order < 256; order++ {
+		for ch := 0; ch < 3; ch++ {
+			if trackLoOff[ch]+order >= len(raw) || trackHiOff[ch]+order >= len(raw) {
+				continue
+			}
+			lo := raw[trackLoOff[ch]+order]
+			hi := raw[trackHiOff[ch]+order]
+			addr := uint16(lo) | uint16(hi)<<8
+			srcOff := int(addr) - baseAddr
+			if srcOff >= 0 && srcOff+192 <= len(raw) {
+				patternAddrs[addr] = true
+			}
+		}
+	}
+
+	for addr := range patternAddrs {
+		srcOff := int(addr) - baseAddr
+		for row := 0; row < 64; row++ {
+			off := srcOff + row*3
+			byte0 := raw[off]
+			byte1 := raw[off+1]
+			effect := (byte1 >> 5) | ((byte0 >> 4) & 8)
+			counts[effect]++
+		}
+	}
+	return counts
 }
 
 // analyzeTableDupes checks for duplicate ranges in wave/arp tables
@@ -481,7 +524,7 @@ type PrevSongTables struct {
 	RowDict []byte
 }
 
-func convertToNewFormat(raw []byte, songNum int, prevTables *PrevSongTables) ([]byte, ConversionStats) {
+func convertToNewFormat(raw []byte, songNum int, prevTables *PrevSongTables, effectRemap [16]byte) ([]byte, ConversionStats) {
 	var stats ConversionStats
 	// Detect base address from entry point JMP (offset 0: 4c xx yy -> base is $yy00)
 	baseAddr := int(raw[2]) << 8
@@ -1040,24 +1083,6 @@ func convertToNewFormat(raw []byte, songNum int, prevTables *PrevSongTables) ([]
 	packedDataOff := 0xF63  // Packed pattern data
 
 	// Extract patterns to slice for packing (do effect/order remapping first)
-	effectRemap := [16]byte{
-		0,  // 0 -> 0 (no effect)
-		1,  // 1 -> 1
-		2,  // 2 -> 2
-		3,  // 3 -> 3
-		4,  // 4 -> 4
-		0,  // 5 -> unused
-		0,  // 6 -> unused
-		5,  // 7 -> 5
-		6,  // 8 -> 6
-		7,  // 9 -> 7
-		8,  // A -> 8
-		9,  // B -> 9
-		0,  // C -> unused
-		10, // D -> A
-		11, // E -> B
-		12, // F -> C
-	}
 	patternData := make([][]byte, numPatterns)
 	for i, addr := range patterns {
 		srcOff := int(addr) - baseAddr
@@ -2605,6 +2630,7 @@ func main() {
 	songData := make([][]byte, 9)
 	var allEffects uint16
 	var allFSubEffects uint16
+	var allEffectCounts [16]int
 	for songNum := 1; songNum <= 9; songNum++ {
 		rawPath := filepath.Join("../../uncompressed", fmt.Sprintf("d%dp.raw", songNum))
 		rawData, err := os.ReadFile(rawPath)
@@ -2619,6 +2645,10 @@ func main() {
 		effects, fSubs := analyzeEffects(rawData)
 		allEffects |= effects
 		allFSubEffects |= fSubs
+		songCounts := countEffectUsage(rawData)
+		for i := 0; i < 16; i++ {
+			allEffectCounts[i] += songCounts[i]
+		}
 	}
 	// Print used effects
 	fmt.Printf("Used effects:")
@@ -2640,6 +2670,38 @@ func main() {
 		if allFSubEffects&(1<<i) != 0 {
 			fmt.Printf("F%Xx ", i)
 		}
+	}
+	fmt.Println()
+
+	// Build frequency-sorted effect remapping (most frequent first, excluding 0 and unused)
+	// Collect used effects with their counts (excluding effect 0 = no effect)
+	type effectFreq struct {
+		oldEffect int
+		count     int
+	}
+	var usedEffects []effectFreq
+	for i := 1; i < 16; i++ {
+		if allEffects&(1<<i) != 0 {
+			usedEffects = append(usedEffects, effectFreq{i, allEffectCounts[i]})
+		}
+	}
+	sort.Slice(usedEffects, func(i, j int) bool {
+		return usedEffects[i].count > usedEffects[j].count
+	})
+
+	// Generate remapping: old effect -> new effect (1-based, sorted by frequency)
+	effectRemap := [16]byte{} // 0 stays 0
+	fmt.Printf("Effect frequency order (old->new):")
+	for newIdx, ef := range usedEffects {
+		effectRemap[ef.oldEffect] = byte(newIdx + 1)
+		fmt.Printf(" %X->%X(%d)", ef.oldEffect, newIdx+1, ef.count)
+	}
+	fmt.Println()
+
+	// Print the required effectptrs table ordering for the player
+	fmt.Printf("effectptrs table order:")
+	for _, ef := range usedEffects {
+		fmt.Printf(" effect%02x", ef.oldEffect)
 	}
 	fmt.Println()
 
@@ -2717,7 +2779,7 @@ func main() {
 		if songData[songNum-1] == nil {
 			continue
 		}
-		convertedData, stats := convertToNewFormat(songData[songNum-1], songNum, prevTables)
+		convertedData, stats := convertToNewFormat(songData[songNum-1], songNum, prevTables, effectRemap)
 		convertedSongs[songNum-1] = convertedData
 		convertedStats[songNum-1] = stats
 

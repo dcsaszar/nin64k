@@ -84,15 +84,15 @@ func getNumOrders(data []byte, maxFrames int) int {
 				}
 				r := pattern[rowNum]
 				effect := (r.InstEff >> 5) | ((r.Note >> 4) & 0x08)
-				if effect == 0x0C && r.Param < 0x80 && r.Param > 0 {
-					speed = int(r.Param)
+				if effect == 0x03 && r.Param < 0x80 && r.Param > 0 {
+					speed = int(r.Param) // Effect 3 = Fxx, param < 0x80 = speed
 				}
-				// Effect 9 = position jump: jump to the specified order
-				if effect == 9 {
+				// Effect C = position jump
+				if effect == 0x0C {
 					loopTarget = int(r.Param)
 				}
-				// Effect A = pattern break
-				if effect == 0x0A {
+				// Effect B = pattern break
+				if effect == 0x0B {
 					patternBroken = true
 				}
 			}
@@ -571,7 +571,7 @@ func simulateStreamPlayer(streams [3][]byte, transpose [3][]int8, songBoundaries
 			off := row * 3
 			noteByte, instEff, param := streams[ch][off], streams[ch][off+1], streams[ch][off+2]
 			effect := int((instEff >> 5) | ((noteByte >> 4) & 0x08))
-			if effect == 0x0C && param < 0x80 && param > 0 {
+			if effect == 0x03 && param < 0x80 && param > 0 { // Effect 3 = Fxx speed
 				speed = int(param)
 			}
 		}
@@ -694,7 +694,7 @@ func simulateStreamPlayer(streams [3][]byte, transpose [3][]int8, songBoundaries
 				}
 
 				// Handle speed change (effect C)
-				if effect == 0x0C && param < 0x80 && param > 0 {
+				if effect == 0x03 && param < 0x80 && param > 0 { // Effect 3 = Fxx speed
 					speed = int(param)
 				}
 			}
@@ -747,11 +747,11 @@ func simulateStreamPlayer(streams [3][]byte, transpose [3][]int8, songBoundaries
 				}
 			}
 
-			// Apply tracker effects
+			// Apply tracker effects (new effect numbers: 1=arp, 2=porta, 9=slideup)
 			switch s.effect {
-			case 1: // Slide up
+			case 9: // Slide up (old effect 1 -> new effect 9)
 				s.freq += uint16(s.param)
-			case 3: // Portamento
+			case 2: // Portamento (old effect 3 -> new effect 2)
 				if s.portaTarget > s.freq {
 					newFreq := s.freq + uint16(s.param)
 					if newFreq > s.portaTarget {
@@ -769,7 +769,7 @@ func simulateStreamPlayer(streams [3][]byte, transpose [3][]int8, songBoundaries
 						s.freq = newFreq
 					}
 				}
-			case 8: // Arpeggio (tracker effect - cycles through chord using mod3counter)
+			case 1: // Arpeggio (old effect A -> new effect 1)
 				// Player order: mod3=0→arpY, mod3=1→arpX, mod3=2→base
 				arpX := int(s.param >> 4)
 				arpY := int(s.param & 0x0F)
@@ -1294,18 +1294,18 @@ func runSideBySideValidation(streams [3][]byte, transpose [3][]int8, songBoundar
 						simState[ch].envPhase = 3  // release
 					}
 
-					if effect == 0x0C && param < 0x80 && param > 0 {
+					if effect == 0x03 && param < 0x80 && param > 0 { // Effect 3 = Fxx speed
 						speed = int(param)
 					}
-					// Effect A = pattern break (remapped from old effect D)
+					// Effect B = pattern break (from old effect D)
 					// Sets firsttrackrow and forcenewpattern=$80
-					if effect == 0x0A {
+					if effect == 0x0B {
 						firsttrackrow = int(param)
 						forcenewpattern = true
 					}
-					// Effect 9 = position jump (remapped from old effect B)
+					// Effect C = position jump
 					// Sets nextordernumber and forcenewpattern=$80
-					if effect == 0x09 {
+					if effect == 0x0C {
 						nextordernumber = int(param)
 						forcenewpattern = true
 					}
@@ -1446,24 +1446,18 @@ func runSideBySideValidation(streams [3][]byte, transpose [3][]int8, songBoundar
 					}
 				}
 
-				// Apply effects
+				// Apply effects (frequency-sorted: 1=arp, 2=porta, 3=Fxx, 4=SR, 5=wave, 6=down, 7=AD, 8=reso, 9=up, A=vib)
 				switch s.effect {
-				case 1: // Slide - modifies slideDelta by ±$20
+				case 9: // Slide up (old effect 1 -> new 9)
 					s.slideEnable = true
-					if s.param&0x80 != 0 {
-						// Slide up (param bit 7 set)
-						s.slideDelta += 0x20
-					} else {
-						// Slide down
-						s.slideDelta -= 0x20
-					}
-				case 2: // Set pulse width from parameter
-					s.plsWidthLo = s.param << 4
-					s.plsWidthHi = s.param >> 4
-				case 3: // Portamento - slides freq toward noteFreq (like player's effect03)
+					s.slideDelta += 0x20
+				case 6: // Slide down (old effect 2 -> new 6)
+					s.slideEnable = true
+					s.slideDelta -= 0x20
+				case 2: // Portamento (old effect 3 -> new 2)
 					// Player uses chn_notefreq as target, which is set by:
-					// - set_notefreq_only when new note with effect=3
-					// - arp table lookup when effect != 3
+					// - set_notefreq_only when new note with effect=2
+					// - arp table lookup when effect != 2
 					deltaLo := (s.param << 4) & 0xFF
 					deltaHi := s.param >> 4
 					delta := uint16(deltaHi)<<8 | uint16(deltaLo)
@@ -1484,16 +1478,16 @@ func runSideBySideValidation(streams [3][]byte, transpose [3][]int8, songBoundar
 							s.freq = newFreq
 						}
 					}
-				case 4: // Vibrato effect - sets depth and speed
+				case 10: // Vibrato (old effect 4 -> new A)
 					s.vibDepth = int(s.param & 0xF0) // high nibble as-is
 					s.vibSpeed = int(s.param & 0x0F)
-				case 5: // Set AD register directly
+				case 7: // Set AD (old effect 7 -> new 7, unchanged)
 					s.ad = s.param
-				case 6: // Set SR register directly
+				case 4: // Set SR (old effect 8 -> new 4)
 					s.sr = s.param
-				case 7: // Set waveform register directly (runs every frame, overrides wave table)
+				case 5: // Set waveform (old effect 9 -> new 5)
 					s.waveform = s.param
-				case 8:
+				case 1: // Arpeggio (old effect A -> new 1)
 					arpX := int(s.param >> 4)
 					arpY := int(s.param & 0x0F)
 					var arpOffset int
@@ -1510,9 +1504,9 @@ func runSideBySideValidation(streams [3][]byte, transpose [3][]int8, songBoundar
 						s.freq = uint16(freqTableLo[idx]) | uint16(freqTableHi[idx])<<8
 						s.noteFreq = s.freq
 					}
-				case 11: // Effect B = set filter resonance
+				case 8: // Filter resonance (old effect E -> new 8)
 					filterResonance = s.param
-				case 12: // Effect C = old effect F (extended effects) - only on first frame of row
+				case 3: // Extended Fxx (old effect F -> new 3)
 					if speedCounter == 0 && s.param >= 0x80 {
 						highNibble := s.param & 0xF0
 						lowNibble := s.param & 0x0F
@@ -2248,10 +2242,10 @@ func runStreamOnlySimulation(streams []intStream, idxToNote []int) SIDRegisters 
 						simState[ch].gateOn = 0xFE
 					}
 
-					if effect == 0x0C && param < 0x80 && param > 0 {
+					if effect == 0x03 && param < 0x80 && param > 0 { // Effect 3 = Fxx speed
 						speed = int(param)
 					}
-					if effect == 0x0A {
+					if effect == 0x0B { // Effect B = pattern break
 						firsttrackrow = int(param)
 						forcenewpattern = true
 					}
@@ -2352,19 +2346,15 @@ func runStreamOnlySimulation(streams []intStream, idxToNote []int) SIDRegisters 
 					}
 				}
 
-				// Effects
+				// Effects (frequency-sorted: 1=arp, 2=porta, 3=Fxx, 4=SR, 5=wave, 6=down, 7=AD, 8=reso, 9=up, A=vib)
 				switch s.effect {
-				case 1:
+				case 9: // Slide up (old effect 1 -> new 9)
 					s.slideEnable = true
-					if s.param&0x80 != 0 {
-						s.slideDelta += 0x20
-					} else {
-						s.slideDelta -= 0x20
-					}
-				case 2: // Set pulse width from parameter
-					s.plsWidthLo = s.param << 4
-					s.plsWidthHi = s.param >> 4
-				case 3:
+					s.slideDelta += 0x20
+				case 6: // Slide down (old effect 2 -> new 6)
+					s.slideEnable = true
+					s.slideDelta -= 0x20
+				case 2: // Portamento (old effect 3 -> new 2)
 					deltaLo := (s.param << 4) & 0xFF
 					deltaHi := s.param >> 4
 					delta := uint16(deltaHi)<<8 | uint16(deltaLo)
@@ -2385,16 +2375,16 @@ func runStreamOnlySimulation(streams []intStream, idxToNote []int) SIDRegisters 
 							s.freq = newFreq
 						}
 					}
-				case 4:
+				case 10: // Vibrato (old effect 4 -> new A)
 					s.vibDepth = int(s.param & 0xF0)
 					s.vibSpeed = int(s.param & 0x0F)
-				case 5: // Set AD register directly
+				case 7: // Set AD (old effect 7 -> new 7, unchanged)
 					s.ad = s.param
-				case 6: // Set SR register directly
+				case 4: // Set SR (old effect 8 -> new 4)
 					s.sr = s.param
-				case 7: // Set waveform register directly (runs every frame)
+				case 5: // Set waveform (old effect 9 -> new 5)
 					s.waveform = s.param
-				case 8: // Arpeggio effect - apply trans at runtime
+				case 1: // Arpeggio (old effect A -> new 1)
 					arpX := int(s.param >> 4)
 					arpY := int(s.param & 0x0F)
 					var arpOffset int
@@ -2411,9 +2401,9 @@ func runStreamOnlySimulation(streams []intStream, idxToNote []int) SIDRegisters 
 						s.freq = uint16(freqTableLo[idx]) | uint16(freqTableHi[idx])<<8
 						s.noteFreq = s.freq
 					}
-				case 11: // Effect B = set filter resonance
+				case 8: // Filter resonance (old effect E -> new 8)
 					filterResonance = s.param
-				case 12: // Effect C = old effect F (extended effects) - only on first frame of row
+				case 3: // Extended Fxx (old effect F -> new 3)
 					if speedCounter == 0 && s.param >= 0x80 {
 						highNibble := int(s.param & 0xF0)
 						lowNibble := int(s.param & 0x0F)
@@ -3290,7 +3280,7 @@ func main() {
 
 	// Write each channel to a tab-separated file with decoded fields
 	noteNames := []string{"C-", "C#", "D-", "D#", "E-", "F-", "F#", "G-", "G#", "A-", "A#", "B-"}
-	effectNames := []string{"", "sld", "pls", "por", "vib", "AD", "SR", "wav", "arp", "jmp", "brk", "res", "Fxx"}
+	effectNames := []string{"", "sld", "pls", "por", "vib", "AD", "SR", "wav", "arp", "res", "Fxx", "brk", "jmp"}
 
 	noteName := func(n byte) string {
 		if n == 0 {
@@ -3679,7 +3669,7 @@ func main() {
 				}
 
 				// Track FEx effect (effect C = 12 with param 0xEx)
-				if effect == 12 && (param&0xF0) == 0xE0 {
+				if effect == 3 && (param&0xF0) == 0xE0 { // Effect 3 = Fxx, FEx sub-effect
 					fxInst := int(param & 0x0F)
 					if fxInst > 0 {
 						if instLifetimes[fxInst] == nil {
@@ -3878,7 +3868,7 @@ func main() {
 			paramHi := (fxParam >> 4) & 0xF
 			paramLo := fxParam & 0xF
 			// FEx effect: effect=C (12), param=0xEx where x is instrument ID
-			if effect == 12 && paramHi == 0xE && paramLo > 0 {
+			if effect == 3 && paramHi == 0xE && paramLo > 0 { // Effect 3 = Fxx, FEx
 				fexCount++
 				// Find which song this row belongs to
 				songIdx := 0
