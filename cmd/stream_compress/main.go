@@ -1848,6 +1848,7 @@ func runStreamOnlySimulation(streams []intStream, idxToNote []int) SIDRegisters 
 	// streams[6-11]: Ch0-2 TransV, TransD (2 per channel = 6)
 	// streams[12-17]: Ch0-2 FxV, FxD (2 per channel = 6)
 	// streams[18-23]: Ch0-2 InstV, InstD (2 per channel = 6)
+	//   InstV: slot index (0-30), InstD: delta since last trigger
 	// streams[24]: TblData
 
 	// Get numRows by summing FxD durations (Fx is now sparse)
@@ -1900,18 +1901,18 @@ func runStreamOnlySimulation(streams []intStream, idxToNote []int) SIDRegisters 
 
 	// Decode sparse inst streams back to per-row format
 	// InstV/InstD are at indices 18+ch*2 and 18+ch*2+1
+	// NEW FORMAT: InstD = delta since last emit (or song start), InstV = slot (0-30)
+	// Only non-zero instrument triggers are stored; decoder defaults to 0
 	var decodedInst [3][]int
 	for ch := 0; ch < 3; ch++ {
-		instVal := streams[18+ch*2].data   // InstV at 18,20,22
+		instVal := streams[18+ch*2].data   // InstV at 18,20,22 (stores 0-30)
 		instDur := streams[18+ch*2+1].data // InstD at 19,21,23
-		decoded := make([]int, numRows)
+		decoded := make([]int, numRows)    // Default all to 0
 		row := 0
 		for i := 0; i < len(instVal); i++ {
-			val := instVal[i]
-			dur := instDur[i]
-			for j := 0; j < dur && row < numRows; j++ {
-				decoded[row] = val
-				row++
+			row += instDur[i] // Delta to next inst change
+			if row < numRows {
+				decoded[row] = instVal[i] + 1 // +1 to convert 0-30 back to 1-31
 			}
 		}
 		decodedInst[ch] = decoded
@@ -3894,7 +3895,7 @@ func main() {
 				// Look up slot for this song's instrument
 				key := (songIdx << 8) | origInst
 				if slot, ok := instToSlot[key]; ok {
-					instStreamData[ch][row] = slot + 1 // +1 because 0 means "no change"
+					instStreamData[ch][row] = slot + 1 // +1 so 0 means "no trigger this row"
 				}
 			}
 		}
@@ -3979,14 +3980,29 @@ func main() {
 		fxCombinedBits, fxSparseBits, fxSparseBits-fxCombinedBits, (fxSparseBits-fxCombinedBits)/8)
 
 	// Now build sparse inst encoding (after inst-to-slot conversion)
+	// NEW FORMAT: Only emit non-zero instrument changes with delta timing
+	// InstD = delta from last emit (or row 0), InstV = non-zero slot
 	var sparseInstVal [3][]int
 	var sparseInstDur [3][]int
 	fmt.Println("\nInst stream sparsity analysis (after slot conversion):")
 	totalCurrentBits := 0
 	totalSparseBits := 0
+	totalOldEntries := 0
 	for ch := 0; ch < 3; ch++ {
 		total := len(instStreamData[ch])
-		// Build sparse encoding
+		// Build sparse encoding - only emit non-zero values
+		lastEmitRow := 0
+		for i := 0; i < len(instStreamData[ch]); i++ {
+			val := instStreamData[ch][i]
+			if val != 0 {
+				delta := i - lastEmitRow
+				sparseInstVal[ch] = append(sparseInstVal[ch], val-1) // Store 0-30 instead of 1-31
+				sparseInstDur[ch] = append(sparseInstDur[ch], delta)
+				lastEmitRow = i
+			}
+		}
+		// Count old-style entries for comparison
+		oldEntries := 0
 		i := 0
 		for i < len(instStreamData[ch]) {
 			val := instStreamData[ch][i]
@@ -3994,11 +4010,11 @@ func main() {
 			for i+dur < len(instStreamData[ch]) && instStreamData[ch][i+dur] == val {
 				dur++
 			}
-			sparseInstVal[ch] = append(sparseInstVal[ch], val)
-			sparseInstDur[ch] = append(sparseInstDur[ch], dur)
+			oldEntries++
 			i += dur
 		}
-		// Calculate bit costs (raw exp-golomb, no backrefs to be fair)
+		totalOldEntries += oldEntries
+		// Calculate bit costs
 		currentBits := 0
 		for _, v := range instStreamData[ch] {
 			currentBits += expGolombBits(v, 0)
@@ -4008,16 +4024,15 @@ func main() {
 			sparseBits += expGolombBits(sparseInstVal[ch][j], 0)
 			sparseBits += expGolombBits(sparseInstDur[ch][j], 0)
 		}
-		fmt.Printf("  Ch%d: %d rows, %d changes, current %d bits, sparse %d bits (%+d)\n",
-			ch, total, len(sparseInstVal[ch]), currentBits, sparseBits, sparseBits-currentBits)
+		fmt.Printf("  Ch%d: %d rows, %d entries (was %d), sparse %d bits\n",
+			ch, total, len(sparseInstVal[ch]), oldEntries, sparseBits)
 		totalCurrentBits += currentBits
 		totalSparseBits += sparseBits
 		// Add to streams
 		streams = append(streams, intStream{sparseInstVal[ch], 0, fmt.Sprintf("Ch%d InstV", ch), true, 512})
 		streams = append(streams, intStream{sparseInstDur[ch], 0, fmt.Sprintf("Ch%d InstD", ch), true, 512})
 	}
-	fmt.Printf("  Total: current %d bits, sparse %d bits (%+d bits = %+d bytes)\n",
-		totalCurrentBits, totalSparseBits, totalSparseBits-totalCurrentBits, (totalSparseBits-totalCurrentBits)/8)
+	fmt.Printf("  Total: %d entries (was %d)\n", len(sparseInstVal[0])+len(sparseInstVal[1])+len(sparseInstVal[2]), totalOldEntries)
 
 	// Sort incrLoadEvents by row for correct delta encoding
 	sort.Slice(incrLoadEvents, func(i, j int) bool {
@@ -4335,10 +4350,12 @@ func main() {
 			simMismatch++
 		}
 	}
+	validationFailed := false
 	if simMismatch == 0 {
 		fmt.Println("  Stream encoding: PASS (all SID registers $D400-$D418 match)")
 	} else {
 		fmt.Printf("  Stream encoding: FAIL (%d mismatches in SID registers)\n", simMismatch)
+		validationFailed = true
 	}
 
 	// Bit-level DP for integer stream chunks
@@ -4603,8 +4620,8 @@ func main() {
 		"NoteDur": "rows before each note event",
 		"FxV":     "(effect<<8)|param value",
 		"FxD":     "rows until next fx change",
-		"InstV":   "slot ID (0=no change, 1-31=slot)",
-		"InstD":   "rows until next inst change",
+		"InstV":   "slot index (0-30, only triggers stored)",
+		"InstD":   "delta rows since last inst trigger (or song start)",
 		"TransV":  "transpose (zigzag: 0→0, -1→1, 1→2, ...)",
 		"TransD":  "orders until next transpose change",
 		"TblData": "load: delta, slot, inst[16], waveLen, wave[], arpLen, arp[], filtLen, filt[]; reset(65535): frame, row",
@@ -4637,4 +4654,8 @@ func main() {
 	fmt.Printf("Current:    26,270 bytes\n")
 	fmt.Printf("Savings:    %+d bytes (%.1f%%)\n", totalBytes-26270, float64(26270-totalBytes)*100/26270)
 	fmt.Printf("Time:       %.2fs\n", time.Since(mainStart).Seconds())
+
+	if validationFailed {
+		os.Exit(1)
+	}
 }
