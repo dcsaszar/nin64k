@@ -1181,9 +1181,10 @@ func convertToNewFormat(raw []byte, songNum int, prevTables *PrevSongTables, eff
 					val = byte(newVal)
 				}
 				// Remap vibrato depth (param 9 = INST_VIBDEPSP, high nibble is depth)
-				// Used depths: 0,1,2,3,4,5,6,8,10,15 -> remap to 0,1,2,3,4,5,6,7,8,9
+				// Frequency-sorted: 4(22) 2(13) 3(11) 1(6) 6(2) 10(1) 5(1) 8(1) 15(1)
+				// Remap to 0,1,2,3,4,5,6,7,8,9 by frequency
 				if param == 9 {
-					vibDepthRemap := [16]byte{0, 1, 2, 3, 4, 5, 6, 0, 7, 0, 8, 0, 0, 0, 0, 9}
+					vibDepthRemap := [16]byte{0, 4, 2, 3, 1, 7, 5, 0, 8, 0, 6, 0, 0, 0, 0, 9}
 					oldDepth := val >> 4
 					speed := val & 0x0F
 					newDepth := vibDepthRemap[oldDepth]
@@ -2734,8 +2735,8 @@ func main() {
 	fmt.Printf("Global patterns: %d unique across all songs, %d shared between songs\n", totalUniquePatterns, sharedPatterns)
 	fmt.Printf("Pattern refs per song: %v (total %d, dedup saves %d)\n", songPatternCounts, totalPatternRefs, totalPatternRefs-totalUniquePatterns)
 
-	// Analyze vibrato depth usage across all instruments
-	vibDepthUsed := make(map[int]bool)
+	// Analyze vibrato depth usage frequency across all instruments
+	vibDepthCount := make(map[int]int)
 	for songNum := 1; songNum <= 9; songNum++ {
 		if songData[songNum-1] == nil {
 			continue
@@ -2751,19 +2752,29 @@ func main() {
 			vibDepSp := raw[srcInstOff+9*numInst+inst]
 			depth := int(vibDepSp >> 4)
 			if depth > 0 {
-				vibDepthUsed[depth] = true
+				vibDepthCount[depth]++
 			}
 		}
 	}
-	fmt.Printf("Vibrato depths used:")
-	for d := 0; d < 16; d++ {
-		if vibDepthUsed[d] {
-			fmt.Printf(" %d", d)
-		}
+	// Sort depths by frequency (descending)
+	type depthFreq struct {
+		depth int
+		count int
+	}
+	var depthFreqs []depthFreq
+	for d, c := range vibDepthCount {
+		depthFreqs = append(depthFreqs, depthFreq{d, c})
+	}
+	sort.Slice(depthFreqs, func(i, j int) bool {
+		return depthFreqs[i].count > depthFreqs[j].count
+	})
+	fmt.Printf("Vibrato depths by frequency:")
+	for _, df := range depthFreqs {
+		fmt.Printf(" %d(%d)", df.depth, df.count)
 	}
 	fmt.Printf(" (unused:")
 	for d := 1; d < 16; d++ {
-		if !vibDepthUsed[d] {
+		if vibDepthCount[d] == 0 {
 			fmt.Printf(" %d", d)
 		}
 	}
