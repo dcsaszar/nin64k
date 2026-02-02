@@ -10,6 +10,50 @@ import (
 	"sync"
 )
 
+var projectRoot string
+
+func init() {
+	projectRoot = findProjectRoot()
+}
+
+func findProjectRoot() string {
+	// Try to find project root by looking for known markers
+	// Start from executable location, then try working directory
+	candidates := []string{}
+
+	// If running via "go run", check relative to source file
+	if exe, err := os.Executable(); err == nil {
+		dir := filepath.Dir(exe)
+		candidates = append(candidates, filepath.Join(dir, "../.."))
+	}
+
+	// Check working directory and parent directories
+	if wd, err := os.Getwd(); err == nil {
+		candidates = append(candidates, wd)
+		candidates = append(candidates, filepath.Join(wd, "../.."))
+		for d := wd; d != "/" && d != "."; d = filepath.Dir(d) {
+			candidates = append(candidates, d)
+		}
+	}
+
+	for _, c := range candidates {
+		abs, err := filepath.Abs(c)
+		if err != nil {
+			continue
+		}
+		// Check for known project structure
+		if _, err := os.Stat(filepath.Join(abs, "src/odin_player.inc")); err == nil {
+			return abs
+		}
+	}
+	// Fallback: assume running from tools/odin_convert
+	return "../.."
+}
+
+func projectPath(rel string) string {
+	return filepath.Join(projectRoot, rel)
+}
+
 func commas(n uint64) string {
 	s := fmt.Sprintf("%d", n)
 	if len(s) <= 3 {
@@ -1382,7 +1426,7 @@ func loadEquivCache() []EquivResult {
 	}
 	equivCacheLoaded = true
 
-	data, err := os.ReadFile("equiv_cache.json")
+	data, err := os.ReadFile(projectPath("tools/odin_convert/equiv_cache.json"))
 	if err != nil {
 		return nil
 	}
@@ -2741,7 +2785,7 @@ func testSong(songNum int, rawData, convertedData []byte, convStats ConversionSt
 }
 
 func main() {
-	playerData, err := os.ReadFile("../../build/player.bin")
+	playerData, err := os.ReadFile(projectPath("build/player.bin"))
 	if err != nil {
 		fmt.Printf("Error loading build/player.bin: %v\n", err)
 		os.Exit(1)
@@ -2754,7 +2798,7 @@ func main() {
 	var allFSubEffects uint16
 	var allEffectCounts [16]int
 	for songNum := 1; songNum <= 9; songNum++ {
-		rawPath := filepath.Join("../../uncompressed", fmt.Sprintf("d%dp.raw", songNum))
+		rawPath := projectPath(filepath.Join("uncompressed", fmt.Sprintf("d%dp.raw", songNum)))
 		rawData, err := os.ReadFile(rawPath)
 		if err != nil {
 			fmt.Printf("Song %d: ERROR %v\n", songNum, err)
@@ -3017,7 +3061,7 @@ func main() {
 	}
 
 	// Write converted parts to generated/parts directory
-	partsDir := "../../generated/parts"
+	partsDir := projectPath("generated/parts")
 	if err := os.MkdirAll(partsDir, 0755); err != nil {
 		fmt.Printf("Error creating parts directory: %v\n", err)
 		os.Exit(1)
@@ -3203,7 +3247,7 @@ type EquivResult struct {
 // 3. Same signature [*,y,z] - same inst/effect/param, any note
 // 4. Same note [x,*,*] - same note, any inst/effect/param
 func testEquivalence(convertedSongs [][]byte, convertedStats []ConversionStats, playerData []byte) {
-	cacheFile := "equiv_cache.json"
+	cacheFile := projectPath("tools/odin_convert/equiv_cache.json")
 
 	// Try to load cached results
 	var results []EquivResult

@@ -1843,7 +1843,6 @@ func runStreamOnlySimulation(streams []intStream, idxToNote []int) SIDRegisters 
 	var result SIDRegisters
 
 	// Extract data from streams - SPARSE LAYOUT WITH TRANSPOSE:
-	// streams[0-3]: Ch0 NoteVal, NoteDur, Inst, Fx
 	// Stream layout:
 	// streams[0-5]: Ch0-2 NoteVal, NoteDur (2 per channel = 6)
 	// streams[6-11]: Ch0-2 TransV, TransD (2 per channel = 6)
@@ -3593,7 +3592,7 @@ func main() {
 	}
 
 	// Build stream array - Notes first (Fx added later after FEx conversion)
-	// Layout: Ch0(NoteVal,NoteDur,FxV,FxD), Ch1(...), Ch2(...), Trans, Inst, TblData
+	// Layout: Ch0-2(NoteVal,NoteDur), Ch0-2(TransV,TransD), Ch0-2(FxE,FxP,FxD), Ch0-2(InstV,InstD), TblData
 	for ch := 0; ch < 3; ch++ {
 		streams = append(streams, intStream{remappedNoteData[ch], 3, fmt.Sprintf("Ch%d NoteVal", ch), true, 1024})
 		streams = append(streams, intStream{sparseNoteDur[ch], 1, fmt.Sprintf("Ch%d NoteDur", ch), true, 512})
@@ -3935,7 +3934,9 @@ func main() {
 	}
 
 	// Now build sparse Fx encoding (after FEx slot conversion)
-	var sparseFxVal [3][]int
+	var sparseFxVal [3][]int // Combined (effect<<8)|param - for comparison
+	var sparseFxEff [3][]int // Effect number (0-12)
+	var sparseFxPar [3][]int // Effect parameter
 	var sparseFxDur [3][]int
 	fmt.Println("\nFx+P sparse encoding (after FEx conversion):")
 	fxCombinedBits := 0
@@ -3957,6 +3958,8 @@ func main() {
 				dur++
 			}
 			sparseFxVal[ch] = append(sparseFxVal[ch], val)
+			sparseFxEff[ch] = append(sparseFxEff[ch], (val>>8)&0xF)
+			sparseFxPar[ch] = append(sparseFxPar[ch], val&0xFF)
 			sparseFxDur[ch] = append(sparseFxDur[ch], dur)
 			i += dur
 		}
@@ -3968,7 +3971,7 @@ func main() {
 		fmt.Printf("  Ch%d: %d rows, %d zeros (%.1f%%), %d changes\n",
 			ch, len(fxStreamData[ch]), zeros, 100.0*float64(zeros)/float64(len(fxStreamData[ch])),
 			len(sparseFxVal[ch]))
-		// Add Fx streams
+		// Add Fx streams (combined value + duration)
 		streams = append(streams, intStream{sparseFxVal[ch], 0, fmt.Sprintf("Ch%d FxV", ch), true, 512})
 		streams = append(streams, intStream{sparseFxDur[ch], 0, fmt.Sprintf("Ch%d FxD", ch), true, 512})
 	}
@@ -4557,6 +4560,7 @@ func main() {
 	for sIdx := 0; sIdx < numStreams; sIdx++ {
 		totalCompBits += streamTotalBits[sIdx]
 	}
+
 	lookupTableBytes := len(idxToNote) - 1
 	totalBytes := (totalCompBits+7)/8 + lookupTableBytes
 
