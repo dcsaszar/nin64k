@@ -1342,6 +1342,11 @@ func remapPatternEffects(pattern []byte, remap [16]byte) {
 		byte1 = (byte1 & 0x1F) | ((newEffect & 7) << 5)
 		pattern[off] = byte0
 		pattern[off+1] = byte1
+		// Clear param when effect=0 (param is meaningless for no-effect)
+		if newEffect == 0 {
+			pattern[off+2] = 0
+			continue
+		}
 		// Remap effect parameters for specific effects
 		// Old effect 1 (slide): $80/$81 -> 0 (up), $00 -> 1 (down)
 		if oldEffect == 1 {

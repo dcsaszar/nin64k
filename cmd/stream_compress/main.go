@@ -1882,6 +1882,7 @@ func runStreamOnlySimulation(streams []intStream, idxToNote []int) SIDRegisters 
 
 	// Decode sparse Fx streams back to per-row format
 	// FxV/FxD are at indices 12+ch*2 and 12+ch*2+1
+	// FxV uses shifted encoding: 0 → effect=0, >0 → effect=((val-1)>>8)+1, param=(val-1)&0xFF
 	var decodedFx [3][]int
 	for ch := 0; ch < 3; ch++ {
 		fxVal := streams[12+ch*2].data   // FxV at 12,14,16
@@ -1889,8 +1890,16 @@ func runStreamOnlySimulation(streams []intStream, idxToNote []int) SIDRegisters 
 		decoded := make([]int, numRows)
 		row := 0
 		for i := 0; i < len(fxVal); i++ {
-			val := fxVal[i]
+			encodedVal := fxVal[i]
 			dur := fxDur[i]
+			// Decode shifted encoding back to (effect<<8)|param
+			var val int
+			if encodedVal > 0 {
+				shifted := encodedVal - 1
+				effect := (shifted >> 8) + 1
+				param := shifted & 0xFF
+				val = (effect << 8) | param
+			}
 			for j := 0; j < dur && row < numRows; j++ {
 				decoded[row] = val
 				row++
@@ -3611,6 +3620,7 @@ func main() {
 
 	// Build sparse transpose streams (TransVal + TransDur)
 	// Use zigzag encoding for signed values (no LUT needed)
+	// Note: TransV=0 (transpose by 0 semitones) is meaningful data, unlike InstV where 0 means "no trigger"
 	var sparseTransVal [3][]int
 	var sparseTransDur [3][]int
 	for ch := 0; ch < 3; ch++ {
@@ -3951,6 +3961,7 @@ func main() {
 			fxCombinedBits += expGolombBits(v, 0)
 		}
 		// Build sparse encoding: value + duration pairs
+		// FxV uses shifted encoding: effect=0 → 0, effect>0 → ((effect-1)<<8|param)+1
 		i := 0
 		for i < len(fxStreamData[ch]) {
 			val := fxStreamData[ch][i]
@@ -3958,9 +3969,16 @@ func main() {
 			for i+dur < len(fxStreamData[ch]) && fxStreamData[ch][i+dur] == val {
 				dur++
 			}
-			sparseFxVal[ch] = append(sparseFxVal[ch], val)
-			sparseFxEff[ch] = append(sparseFxEff[ch], (val>>8)&0xF)
-			sparseFxPar[ch] = append(sparseFxPar[ch], val&0xFF)
+			// Convert to shifted encoding for better exp-golomb compression
+			effect := (val >> 8) & 0xF
+			param := val & 0xFF
+			encodedVal := 0
+			if effect > 0 {
+				encodedVal = ((effect-1)<<8 | param) + 1
+			}
+			sparseFxVal[ch] = append(sparseFxVal[ch], encodedVal)
+			sparseFxEff[ch] = append(sparseFxEff[ch], effect)
+			sparseFxPar[ch] = append(sparseFxPar[ch], param)
 			sparseFxDur[ch] = append(sparseFxDur[ch], dur)
 			i += dur
 		}
@@ -3978,6 +3996,18 @@ func main() {
 	}
 	fmt.Printf("  Total: combined %d bits, sparse %d bits (%+d bits = %+d bytes)\n",
 		fxCombinedBits, fxSparseBits, fxSparseBits-fxCombinedBits, (fxSparseBits-fxCombinedBits)/8)
+	// Verify no effect=0 with param>0
+	effect0NonZeroParam := 0
+	for ch := 0; ch < 3; ch++ {
+		for _, val := range fxStreamData[ch] {
+			if (val>>8) == 0 && (val&0xFF) != 0 {
+				effect0NonZeroParam++
+			}
+		}
+	}
+	if effect0NonZeroParam > 0 {
+		fmt.Printf("  WARNING: %d rows have effect=0 with param>0\n", effect0NonZeroParam)
+	}
 
 	// Now build sparse inst encoding (after inst-to-slot conversion)
 	// NEW FORMAT: Only emit non-zero instrument changes with delta timing
@@ -4098,7 +4128,7 @@ func main() {
 	incrTableStream = append(incrTableStream, cumFrames[len(cumFrames)-1]) // Total frames
 	incrTableStream = append(incrTableStream, numRows)                     // End row
 
-	// Add single merged table stream with expgol encoding
+	// Single merged table stream with expgol encoding
 	streams = append(streams, intStream{incrTableStream, 0, "TblData", true, 512})
 
 
@@ -4618,13 +4648,13 @@ func main() {
 	streamDescs := map[string]string{
 		"NoteVal": "note index (freq-sorted via LUT, 0=rest)",
 		"NoteDur": "rows before each note event",
-		"FxV":     "(effect<<8)|param value",
-		"FxD":     "rows until next fx change",
+		"FxV":     "shifted: 0=no-effect, >0=((effect-1)<<8|param)+1",
+		"FxD":     "rows this fx value lasts",
 		"InstV":   "slot index (0-30, only triggers stored)",
 		"InstD":   "delta rows since last inst trigger (or song start)",
 		"TransV":  "transpose (zigzag: 0→0, -1→1, 1→2, ...)",
 		"TransD":  "orders until next transpose change",
-		"TblData": "load: delta, slot, inst[16], waveLen, wave[], arpLen, arp[], filtLen, filt[]; reset(65535): frame, row",
+		"TblData": "delta, slot, inst[16], waveLen, wave[], arpLen, arp[], filtLen, filt[]; reset(65535): frame, row",
 	}
 	for _, sIdx := range streamOrder {
 		if sIdx >= len(streams) {
