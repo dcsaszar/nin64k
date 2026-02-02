@@ -3263,37 +3263,37 @@
 01	3E	  	  	C#5 i01
 01	3D	03	F2	C-5 i01 porF2
 0D	3D	  	  	C-5 i13
-  	  	05	FF	--- ADFF
-  	  	05	FF	--- ADFF
-  	  	05	FF	--- ADFF
+  	  	05	  	--- AD00
+  	  	05	  	--- AD00
+  	  	05	  	--- AD00
   	  	  	  	---
-  	  	05	FF	--- ADFF
+  	  	05	  	--- AD00
   	  	  	  	---
-  	  	05	FF	--- ADFF
+  	  	05	  	--- AD00
   	  	  	  	---
-  	  	05	FF	--- ADFF
-  	  	05	FF	--- ADFF
-  	  	05	FF	--- ADFF
+  	  	05	  	--- AD00
+  	  	05	  	--- AD00
+  	  	05	  	--- AD00
   	  	  	  	---
-  	  	05	FF	--- ADFF
-  	  	05	FF	--- ADFF
-  	  	05	FF	--- ADFF
+  	  	05	  	--- AD00
+  	  	05	  	--- AD00
+  	  	05	  	--- AD00
   	  	  	  	---
-  	  	05	FF	--- ADFF
-  	  	05	FF	--- ADFF
-  	  	05	FF	--- ADFF
-  	  	05	FF	--- ADFF
-  	  	05	FF	--- ADFF
-  	  	05	FF	--- ADFF
-  	  	05	FF	--- ADFF
+  	  	05	  	--- AD00
+  	  	05	  	--- AD00
+  	  	05	  	--- AD00
+  	  	05	  	--- AD00
+  	  	05	  	--- AD00
+  	  	05	  	--- AD00
+  	  	05	  	--- AD00
   	  	  	  	---
-  	  	05	FF	--- ADFF
-  	  	05	FF	--- ADFF
-  	  	05	FF	--- ADFF
-  	  	05	FF	--- ADFF
-  	  	05	FF	--- ADFF
-  	  	05	FF	--- ADFF
-  	  	05	FF	--- ADFF
+  	  	05	  	--- AD00
+  	  	05	  	--- AD00
+  	  	05	  	--- AD00
+  	  	05	  	--- AD00
+  	  	05	  	--- AD00
+  	  	05	  	--- AD00
+  	  	05	  	--- AD00
   	  	  	  	---
   	  	  	  	---
   	  	  	  	---
@@ -11774,30 +11774,30 @@
   	  	  	  	---
 0B	20	  	  	G-2 i11
   	  	  	  	---
-1E	41	05	FF	E-5 i30 ADFF
-  	  	05	FF	--- ADFF
+1E	41	05	  	E-5 i30 AD00
+  	  	05	  	--- AD00
   	  	  	  	---
-  	  	05	FF	--- ADFF
-1E	41	05	FF	E-5 i30 ADFF
-  	  	05	FF	--- ADFF
-1E	3F	05	FF	D-5 i30 ADFF
-  	  	05	FF	--- ADFF
-1E	41	05	FF	E-5 i30 ADFF
-  	  	05	FF	--- ADFF
-1E	3F	05	FF	D-5 i30 ADFF
-  	  	05	FF	--- ADFF
-1E	3D	05	FF	C-5 i30 ADFF
-  	  	05	FF	--- ADFF
-1E	3C	05	FF	B-4 i30 ADFF
-  	  	05	FF	--- ADFF
-1E	3D	05	FF	C-5 i30 ADFF
-  	  	05	FF	--- ADFF
-  	  	05	FF	--- ADFF
-  	  	05	FF	--- ADFF
-  	  	05	FF	--- ADFF
-  	  	05	FF	--- ADFF
-  	  	05	FF	--- ADFF
-  	  	05	FF	--- ADFF
+  	  	05	  	--- AD00
+1E	41	05	  	E-5 i30 AD00
+  	  	05	  	--- AD00
+1E	3F	05	  	D-5 i30 AD00
+  	  	05	  	--- AD00
+1E	41	05	  	E-5 i30 AD00
+  	  	05	  	--- AD00
+1E	3F	05	  	D-5 i30 AD00
+  	  	05	  	--- AD00
+1E	3D	05	  	C-5 i30 AD00
+  	  	05	  	--- AD00
+1E	3C	05	  	B-4 i30 AD00
+  	  	05	  	--- AD00
+1E	3D	05	  	C-5 i30 AD00
+  	  	05	  	--- AD00
+  	  	05	  	--- AD00
+  	  	05	  	--- AD00
+  	  	05	  	--- AD00
+  	  	05	  	--- AD00
+  	  	05	  	--- AD00
+  	  	05	  	--- AD00
 06	3D	03	  	C-5 i06 por00
   	  	  	  	---
   	  	  	  	---
@@ -17790,38 +17790,38 @@
   	  	  	  	---
   	  	  	  	---
   	  	  	  	---
-05	2E	05	FF	A-3 i05 ADFF
-  	  	05	FF	--- ADFF
-05	31	05	FF	C-4 i05 ADFF
-  	  	05	FF	--- ADFF
+05	2E	05	  	A-3 i05 AD00
+  	  	05	  	--- AD00
+05	31	05	  	C-4 i05 AD00
+  	  	05	  	--- AD00
   	  	  	  	---
-  	  	05	FF	--- ADFF
-05	30	05	FF	B-3 i05 ADFF
-  	  	05	FF	--- ADFF
-05	31	05	FF	C-4 i05 ADFF
-  	  	05	FF	--- ADFF
-05	2E	05	FF	A-3 i05 ADFF
-  	  	05	FF	--- ADFF
-05	30	05	FF	B-3 i05 ADFF
-  	  	05	FF	--- ADFF
+  	  	05	  	--- AD00
+05	30	05	  	B-3 i05 AD00
+  	  	05	  	--- AD00
+05	31	05	  	C-4 i05 AD00
+  	  	05	  	--- AD00
+05	2E	05	  	A-3 i05 AD00
+  	  	05	  	--- AD00
+05	30	05	  	B-3 i05 AD00
+  	  	05	  	--- AD00
   	  	  	  	---
   	  	  	  	---
-05	2E	05	FF	A-3 i05 ADFF
-  	  	05	FF	--- ADFF
-  	  	05	FF	--- ADFF
-  	  	05	FF	--- ADFF
-  	  	05	FF	--- ADFF
-  	  	05	FF	--- ADFF
-  	  	05	FF	--- ADFF
-  	  	05	FF	--- ADFF
+05	2E	05	  	A-3 i05 AD00
+  	  	05	  	--- AD00
+  	  	05	  	--- AD00
+  	  	05	  	--- AD00
+  	  	05	  	--- AD00
+  	  	05	  	--- AD00
+  	  	05	  	--- AD00
+  	  	05	  	--- AD00
   	  	  	  	---
-  	  	05	FF	--- ADFF
-  	  	05	FF	--- ADFF
-  	  	05	FF	--- ADFF
-  	  	05	FF	--- ADFF
-  	  	05	FF	--- ADFF
-  	  	05	FF	--- ADFF
-  	  	05	FF	--- ADFF
+  	  	05	  	--- AD00
+  	  	05	  	--- AD00
+  	  	05	  	--- AD00
+  	  	05	  	--- AD00
+  	  	05	  	--- AD00
+  	  	05	  	--- AD00
+  	  	05	  	--- AD00
   	  	  	  	---
   	  	  	  	---
   	  	  	  	---
@@ -34174,38 +34174,38 @@
   	  	  	  	---
 09	47	  	  	A#5 i09
   	  	  	  	---
-09	3D	05	FF	C-5 i09 ADFF
-  	  	05	FF	--- ADFF
-09	40	05	FF	D#5 i09 ADFF
-  	  	05	FF	--- ADFF
-09	44	05	FF	G-5 i09 ADFF
-  	  	05	FF	--- ADFF
-09	47	05	FF	A#5 i09 ADFF
-  	  	05	FF	--- ADFF
-09	3F	05	FF	D-5 i09 ADFF
-  	  	05	FF	--- ADFF
-09	40	05	FF	D#5 i09 ADFF
-  	  	05	FF	--- ADFF
-09	44	05	FF	G-5 i09 ADFF
-  	  	05	FF	--- ADFF
-09	47	05	FF	A#5 i09 ADFF
-  	  	05	FF	--- ADFF
-09	3D	05	FF	C-5 i09 ADFF
-  	  	05	FF	--- ADFF
-09	40	05	FF	D#5 i09 ADFF
-  	  	05	FF	--- ADFF
-09	44	05	FF	G-5 i09 ADFF
-  	  	05	FF	--- ADFF
-09	47	05	FF	A#5 i09 ADFF
-  	  	05	FF	--- ADFF
-09	3F	05	FF	D-5 i09 ADFF
-  	  	05	FF	--- ADFF
-09	40	05	FF	D#5 i09 ADFF
-  	  	05	FF	--- ADFF
-09	44	05	FF	G-5 i09 ADFF
-  	  	05	FF	--- ADFF
-09	47	05	FF	A#5 i09 ADFF
-  	  	05	FF	--- ADFF
+09	3D	05	  	C-5 i09 AD00
+  	  	05	  	--- AD00
+09	40	05	  	D#5 i09 AD00
+  	  	05	  	--- AD00
+09	44	05	  	G-5 i09 AD00
+  	  	05	  	--- AD00
+09	47	05	  	A#5 i09 AD00
+  	  	05	  	--- AD00
+09	3F	05	  	D-5 i09 AD00
+  	  	05	  	--- AD00
+09	40	05	  	D#5 i09 AD00
+  	  	05	  	--- AD00
+09	44	05	  	G-5 i09 AD00
+  	  	05	  	--- AD00
+09	47	05	  	A#5 i09 AD00
+  	  	05	  	--- AD00
+09	3D	05	  	C-5 i09 AD00
+  	  	05	  	--- AD00
+09	40	05	  	D#5 i09 AD00
+  	  	05	  	--- AD00
+09	44	05	  	G-5 i09 AD00
+  	  	05	  	--- AD00
+09	47	05	  	A#5 i09 AD00
+  	  	05	  	--- AD00
+09	3F	05	  	D-5 i09 AD00
+  	  	05	  	--- AD00
+09	40	05	  	D#5 i09 AD00
+  	  	05	  	--- AD00
+09	44	05	  	G-5 i09 AD00
+  	  	05	  	--- AD00
+09	47	05	  	A#5 i09 AD00
+  	  	05	  	--- AD00
   	  	  	  	---
   	  	  	  	---
 09	40	  	  	D#5 i09
@@ -41406,7 +41406,7 @@
   	  	  	  	---
 1B	21	  	  	G#2 i27
 1B	21	03	F2	G#2 i27 porF2
-17	40	08	F2	D#5 i23 arpF2
+17	40	08	04	D#5 i23 arp04
   	  	03	91	--- por91
   	  	03	F1	--- porF1
   	  	  	  	---
@@ -41470,7 +41470,7 @@
   	  	  	  	---
   	  	  	  	---
   	  	03	F2	--- porF2
-17	40	08	F2	D#5 i23 arpF2
+17	40	08	04	D#5 i23 arp04
   	  	03	91	--- por91
   	  	03	F1	--- porF1
   	  	  	  	---
@@ -41599,7 +41599,7 @@
   	  	  	  	---
   	  	03	F2	--- porF2
 05	29	03	F0	E-3 i05 porF0
-  	  	08	  	--- arp00
+  	  	08	01	--- arp01
   	  	  	  	---
   	  	  	  	---
   	  	  	  	---
@@ -41982,38 +41982,38 @@
   	  	0A	  	--- Fxx00
   	  	0A	  	--- Fxx00
   	  	0A	  	--- Fxx00
-05	2E	05	FF	A-3 i05 ADFF
-  	  	05	FF	--- ADFF
-  	  	05	FF	--- ADFF
-  	  	05	FF	--- ADFF
-  	  	05	FF	--- ADFF
-  	  	05	FF	--- ADFF
-  	  	05	FF	--- ADFF
-  	  	05	FF	--- ADFF
+05	2E	05	  	A-3 i05 AD00
+  	  	05	  	--- AD00
+  	  	05	  	--- AD00
+  	  	05	  	--- AD00
+  	  	05	  	--- AD00
+  	  	05	  	--- AD00
+  	  	05	  	--- AD00
+  	  	05	  	--- AD00
   	  	  	  	---
-  	  	05	FF	--- ADFF
-  	  	05	FF	--- ADFF
-  	  	05	FF	--- ADFF
-  	  	05	FF	--- ADFF
-  	  	05	FF	--- ADFF
-  	  	05	FF	--- ADFF
-  	  	05	FF	--- ADFF
+  	  	05	  	--- AD00
+  	  	05	  	--- AD00
+  	  	05	  	--- AD00
+  	  	05	  	--- AD00
+  	  	05	  	--- AD00
+  	  	05	  	--- AD00
+  	  	05	  	--- AD00
   	  	  	  	---
-  	  	05	FF	--- ADFF
-  	  	05	FF	--- ADFF
-  	  	05	FF	--- ADFF
-  	  	05	FF	--- ADFF
-  	  	05	FF	--- ADFF
-  	  	05	FF	--- ADFF
-  	  	05	FF	--- ADFF
-  	  	05	FF	--- ADFF
-  	  	05	FF	--- ADFF
-  	  	05	FF	--- ADFF
-  	  	05	FF	--- ADFF
-  	  	05	FF	--- ADFF
-  	  	05	FF	--- ADFF
-  	  	05	FF	--- ADFF
-  	  	05	FF	--- ADFF
+  	  	05	  	--- AD00
+  	  	05	  	--- AD00
+  	  	05	  	--- AD00
+  	  	05	  	--- AD00
+  	  	05	  	--- AD00
+  	  	05	  	--- AD00
+  	  	05	  	--- AD00
+  	  	05	  	--- AD00
+  	  	05	  	--- AD00
+  	  	05	  	--- AD00
+  	  	05	  	--- AD00
+  	  	05	  	--- AD00
+  	  	05	  	--- AD00
+  	  	05	  	--- AD00
+  	  	05	  	--- AD00
   	  	  	  	---
   	  	  	  	---
   	  	  	  	---
@@ -47390,7 +47390,7 @@
   	  	  	  	---
   	  	  	  	---
   	  	  	  	---
-  	  	05	FF	--- ADFF
+  	  	05	  	--- AD00
   	  	03	  	--- por00
   	  	  	  	---
   	  	  	  	---
@@ -47998,7 +47998,7 @@
   	  	  	  	---
   	  	  	  	---
   	  	  	  	---
-08	20	08	  	G-2 i08 arp00
+08	20	08	01	G-2 i08 arp01
   	  	  	  	---
 08	20	  	  	G-2 i08
 08	20	  	  	G-2 i08
@@ -48126,7 +48126,7 @@
   	  	  	  	---
 02	16	03	E2	A-1 i02 porE2
   	  	  	  	---
-08	20	08	  	G-2 i08 arp00
+08	20	08	01	G-2 i08 arp01
   	  	  	  	---
 08	20	  	  	G-2 i08
 08	20	  	  	G-2 i08
@@ -48382,7 +48382,7 @@
   	  	  	  	---
 0C	3A	  	  	A-4 i12
 0C	3A	  	  	A-4 i12
-08	20	08	  	G-2 i08 arp00
+08	20	08	01	G-2 i08 arp01
   	  	  	  	---
 08	20	  	  	G-2 i08
 08	20	  	  	G-2 i08
@@ -48510,7 +48510,7 @@
   	  	  	  	---
 02	16	03	E2	A-1 i02 porE2
   	  	  	  	---
-08	20	08	  	G-2 i08 arp00
+08	20	08	01	G-2 i08 arp01
   	  	  	  	---
 08	20	  	  	G-2 i08
 08	20	  	  	G-2 i08
@@ -50238,7 +50238,7 @@
   	  	  	  	---
   	  	  	  	---
   	  	  	  	---
-08	20	08	  	G-2 i08 arp00
+08	20	08	01	G-2 i08 arp01
   	  	  	  	---
 08	20	  	  	G-2 i08
 08	20	  	  	G-2 i08
@@ -50366,7 +50366,7 @@
   	  	  	  	---
 02	16	03	E2	A-1 i02 porE2
   	  	  	  	---
-08	20	08	  	G-2 i08 arp00
+08	20	08	01	G-2 i08 arp01
   	  	  	  	---
 08	20	  	  	G-2 i08
 08	20	  	  	G-2 i08
@@ -50686,12 +50686,12 @@
   	  	  	  	---
   	  	  	  	---
   	  	  	  	---
-1E	25	05	FF	C-3 i30 ADFF
-  	  	05	FF	--- ADFF
-  	  	05	FF	--- ADFF
-  	  	05	FF	--- ADFF
-  	  	05	FF	--- ADFF
-  	  	05	FF	--- ADFF
+1E	25	05	  	C-3 i30 AD00
+  	  	05	  	--- AD00
+  	  	05	  	--- AD00
+  	  	05	  	--- AD00
+  	  	05	  	--- AD00
+  	  	05	  	--- AD00
   	  	03	  	--- por00
   	  	  	  	---
   	  	  	  	---
@@ -51519,7 +51519,7 @@
   	  	  	  	---
   	  	  	  	---
 0D	0B	03	E1	A#0 i13 porE1
-  	  	08	F1	--- arpF1
+  	  	08	  	--- arp00
   	  	03	93	--- por93
   	  	  	  	---
   	  	  	  	---
@@ -51583,7 +51583,7 @@
   	  	  	  	---
   	  	  	  	---
 0D	0B	03	E1	A#0 i13 porE1
-  	  	08	F1	--- arpF1
+  	  	08	  	--- arp00
   	  	03	93	--- por93
   	  	  	  	---
   	  	  	  	---
@@ -52159,7 +52159,7 @@
 11	15	03	F0	G#1 i17 porF0
 11	15	03	F0	G#1 i17 porF0
 0D	0B	03	E1	A#0 i13 porE1
-  	  	08	F1	--- arpF1
+  	  	08	  	--- arp00
   	  	03	93	--- por93
   	  	  	  	---
   	  	  	  	---
@@ -53502,264 +53502,264 @@
   	  	  	  	---
 11	15	03	F0	G#1 i17 porF0
 11	15	03	F0	G#1 i17 porF0
-10	17	04	FF	A#1 i16 vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-10	17	04	FF	A#1 i16 vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-10	17	04	FF	A#1 i16 vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-10	17	04	FF	A#1 i16 vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
+10	17	04	02	A#1 i16 vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+10	17	04	02	A#1 i16 vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+10	17	04	02	A#1 i16 vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+10	17	04	02	A#1 i16 vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
   	  	03	F2	--- porF2
-08	17	07	0A	A#1 i08 wav0A
-08	17	07	0A	A#1 i08 wav0A
-  	  	07	0A	--- wav0A
-  	  	07	0A	--- wav0A
-19	19	05	81	C-2 i25 AD81
-  	  	05	81	--- AD81
+08	17	07	03	A#1 i08 wav03
+08	17	07	03	A#1 i08 wav03
+  	  	07	03	--- wav03
+  	  	07	03	--- wav03
+19	19	05	03	C-2 i25 AD03
+  	  	05	03	--- AD03
 0C	0B	  	  	A#0 i12
   	  	  	  	---
   	  	  	  	---
   	  	  	  	---
-08	17	07	0A	A#1 i08 wav0A
-  	  	07	0A	--- wav0A
+08	17	07	03	A#1 i08 wav03
+  	  	07	03	--- wav03
 18	19	  	  	C-2 i24
   	  	  	  	---
-08	15	07	0A	G#1 i08 wav0A
-  	  	07	0A	--- wav0A
-08	17	07	0A	A#1 i08 wav0A
-08	17	07	0A	A#1 i08 wav0A
-  	  	07	0A	--- wav0A
-  	  	07	0A	--- wav0A
-19	19	05	81	C-2 i25 AD81
-  	  	05	81	--- AD81
+08	15	07	03	G#1 i08 wav03
+  	  	07	03	--- wav03
+08	17	07	03	A#1 i08 wav03
+08	17	07	03	A#1 i08 wav03
+  	  	07	03	--- wav03
+  	  	07	03	--- wav03
+19	19	05	03	C-2 i25 AD03
+  	  	05	03	--- AD03
 0C	0B	  	  	A#0 i12
   	  	  	  	---
   	  	  	  	---
   	  	  	  	---
-08	17	07	0A	A#1 i08 wav0A
-  	  	07	0A	--- wav0A
+08	17	07	03	A#1 i08 wav03
+  	  	07	03	--- wav03
 18	19	  	  	C-2 i24
   	  	  	  	---
-08	15	07	0A	G#1 i08 wav0A
-  	  	07	0A	--- wav0A
-08	13	07	0A	F#1 i08 wav0A
-08	13	07	0A	F#1 i08 wav0A
-  	  	07	0A	--- wav0A
-  	  	07	0A	--- wav0A
-19	19	05	81	C-2 i25 AD81
-  	  	05	81	--- AD81
+08	15	07	03	G#1 i08 wav03
+  	  	07	03	--- wav03
+08	13	07	03	F#1 i08 wav03
+08	13	07	03	F#1 i08 wav03
+  	  	07	03	--- wav03
+  	  	07	03	--- wav03
+19	19	05	03	C-2 i25 AD03
+  	  	05	03	--- AD03
 0C	07	  	  	F#0 i12
   	  	  	  	---
   	  	  	  	---
   	  	  	  	---
-08	13	07	0A	F#1 i08 wav0A
-  	  	07	0A	--- wav0A
+08	13	07	03	F#1 i08 wav03
+  	  	07	03	--- wav03
 18	3D	  	  	C-5 i24
   	  	  	  	---
-08	12	07	0A	F-1 i08 wav0A
-  	  	07	0A	--- wav0A
-08	1C	07	0A	D#2 i08 wav0A
-08	1C	07	0A	D#2 i08 wav0A
-  	  	07	0A	--- wav0A
-  	  	07	0A	--- wav0A
-19	19	05	81	C-2 i25 AD81
-  	  	05	81	--- AD81
+08	12	07	03	F-1 i08 wav03
+  	  	07	03	--- wav03
+08	1C	07	03	D#2 i08 wav03
+08	1C	07	03	D#2 i08 wav03
+  	  	07	03	--- wav03
+  	  	07	03	--- wav03
+19	19	05	03	C-2 i25 AD03
+  	  	05	03	--- AD03
 0C	10	  	  	D#1 i12
   	  	  	  	---
   	  	  	  	---
   	  	  	  	---
-08	15	07	0A	G#1 i08 wav0A
-  	  	07	0A	--- wav0A
+08	15	07	03	G#1 i08 wav03
+  	  	07	03	--- wav03
 18	3D	  	  	C-5 i24
   	  	  	  	---
-08	15	07	0A	G#1 i08 wav0A
-  	  	07	0A	--- wav0A
-08	17	07	0A	A#1 i08 wav0A
-08	17	07	0A	A#1 i08 wav0A
-  	  	07	0A	--- wav0A
-  	  	07	0A	--- wav0A
-19	19	05	81	C-2 i25 AD81
-  	  	05	81	--- AD81
+08	15	07	03	G#1 i08 wav03
+  	  	07	03	--- wav03
+08	17	07	03	A#1 i08 wav03
+08	17	07	03	A#1 i08 wav03
+  	  	07	03	--- wav03
+  	  	07	03	--- wav03
+19	19	05	03	C-2 i25 AD03
+  	  	05	03	--- AD03
 0C	0B	  	  	A#0 i12
   	  	  	  	---
   	  	  	  	---
   	  	  	  	---
-08	17	07	0A	A#1 i08 wav0A
-  	  	07	0A	--- wav0A
+08	17	07	03	A#1 i08 wav03
+  	  	07	03	--- wav03
 18	19	  	  	C-2 i24
   	  	  	  	---
-08	15	07	0A	G#1 i08 wav0A
-  	  	07	0A	--- wav0A
-08	17	07	0A	A#1 i08 wav0A
-08	17	07	0A	A#1 i08 wav0A
-  	  	07	0A	--- wav0A
-  	  	07	0A	--- wav0A
-19	19	05	81	C-2 i25 AD81
-  	  	05	81	--- AD81
+08	15	07	03	G#1 i08 wav03
+  	  	07	03	--- wav03
+08	17	07	03	A#1 i08 wav03
+08	17	07	03	A#1 i08 wav03
+  	  	07	03	--- wav03
+  	  	07	03	--- wav03
+19	19	05	03	C-2 i25 AD03
+  	  	05	03	--- AD03
 0C	0B	  	  	A#0 i12
   	  	  	  	---
   	  	  	  	---
   	  	  	  	---
-08	17	07	0A	A#1 i08 wav0A
-  	  	07	0A	--- wav0A
+08	17	07	03	A#1 i08 wav03
+  	  	07	03	--- wav03
 18	19	  	  	C-2 i24
   	  	  	  	---
-08	15	07	0A	G#1 i08 wav0A
-  	  	07	0A	--- wav0A
-08	13	07	0A	F#1 i08 wav0A
-08	13	07	0A	F#1 i08 wav0A
-  	  	07	0A	--- wav0A
-  	  	07	0A	--- wav0A
-19	19	05	81	C-2 i25 AD81
-  	  	05	81	--- AD81
+08	15	07	03	G#1 i08 wav03
+  	  	07	03	--- wav03
+08	13	07	03	F#1 i08 wav03
+08	13	07	03	F#1 i08 wav03
+  	  	07	03	--- wav03
+  	  	07	03	--- wav03
+19	19	05	03	C-2 i25 AD03
+  	  	05	03	--- AD03
 0C	07	  	  	F#0 i12
   	  	  	  	---
   	  	  	  	---
   	  	  	  	---
-08	13	07	0A	F#1 i08 wav0A
-  	  	07	0A	--- wav0A
+08	13	07	03	F#1 i08 wav03
+  	  	07	03	--- wav03
 18	3D	  	  	C-5 i24
   	  	  	  	---
-08	12	07	0A	F-1 i08 wav0A
-  	  	07	0A	--- wav0A
-08	1C	07	0A	D#2 i08 wav0A
-08	1C	07	0A	D#2 i08 wav0A
-  	  	07	0A	--- wav0A
-  	  	07	0A	--- wav0A
-19	19	05	81	C-2 i25 AD81
-  	  	05	81	--- AD81
+08	12	07	03	F-1 i08 wav03
+  	  	07	03	--- wav03
+08	1C	07	03	D#2 i08 wav03
+08	1C	07	03	D#2 i08 wav03
+  	  	07	03	--- wav03
+  	  	07	03	--- wav03
+19	19	05	03	C-2 i25 AD03
+  	  	05	03	--- AD03
 0C	10	  	  	D#1 i12
   	  	  	  	---
   	  	  	  	---
   	  	  	  	---
-08	15	07	0A	G#1 i08 wav0A
-  	  	07	0A	--- wav0A
+08	15	07	03	G#1 i08 wav03
+  	  	07	03	--- wav03
 18	3D	  	  	C-5 i24
   	  	  	  	---
-08	15	07	0A	G#1 i08 wav0A
-  	  	07	0A	--- wav0A
-10	17	04	FF	A#1 i16 vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-10	17	04	FF	A#1 i16 vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-10	17	04	FF	A#1 i16 vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-10	17	04	FF	A#1 i16 vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
+08	15	07	03	G#1 i08 wav03
+  	  	07	03	--- wav03
+10	17	04	02	A#1 i16 vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+10	17	04	02	A#1 i16 vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+10	17	04	02	A#1 i16 vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+10	17	04	02	A#1 i16 vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
   	  	03	F2	--- porF2
-19	19	05	81	C-2 i25 AD81
-  	  	05	81	--- AD81
+19	19	05	03	C-2 i25 AD03
+  	  	05	03	--- AD03
 0C	17	  	  	A#1 i12
   	  	  	  	---
   	  	  	  	---
@@ -53774,8 +53774,8 @@
   	  	  	  	---
 0C	15	  	  	G#1 i12
   	  	  	  	---
-19	19	05	81	C-2 i25 AD81
-  	  	05	81	--- AD81
+19	19	05	03	C-2 i25 AD03
+  	  	05	03	--- AD03
 0C	17	  	  	A#1 i12
   	  	  	  	---
   	  	  	  	---
@@ -53822,63 +53822,63 @@
   	  	  	  	---
   	  	  	  	---
   	  	  	  	---
-10	17	04	FF	A#1 i16 vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-10	17	04	FF	A#1 i16 vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
+10	17	04	02	A#1 i16 vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+10	17	04	02	A#1 i16 vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
 18	3D	03	ED	C-5 i24 porED
 18	3D	  	  	C-5 i24
-10	17	04	FF	A#1 i16 vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-10	17	04	FF	A#1 i16 vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
+10	17	04	02	A#1 i16 vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+10	17	04	02	A#1 i16 vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
 18	3D	03	ED	C-5 i24 porED
 18	3D	  	  	C-5 i24
   	  	  	  	---
@@ -53886,63 +53886,63 @@
   	  	  	  	---
 18	3D	  	  	C-5 i24
 18	3D	  	  	C-5 i24
-10	17	04	FF	A#1 i16 vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-10	17	04	FF	A#1 i16 vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
+10	17	04	02	A#1 i16 vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+10	17	04	02	A#1 i16 vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
 18	3D	03	ED	C-5 i24 porED
 18	3D	  	  	C-5 i24
-10	17	04	FF	A#1 i16 vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-10	17	04	FF	A#1 i16 vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
+10	17	04	02	A#1 i16 vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+10	17	04	02	A#1 i16 vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
 18	3D	03	ED	C-5 i24 porED
 18	3D	  	  	C-5 i24
   	  	  	  	---
@@ -54270,127 +54270,63 @@
   	  	  	  	---
 08	1A	  	  	C#2 i08
   	  	  	  	---
-10	17	04	FF	A#1 i16 vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-10	17	04	FF	A#1 i16 vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
+10	17	04	02	A#1 i16 vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+10	17	04	02	A#1 i16 vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
 18	3D	03	ED	C-5 i24 porED
 18	3D	  	  	C-5 i24
-10	17	04	FF	A#1 i16 vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-10	17	04	FF	A#1 i16 vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-18	3D	03	ED	C-5 i24 porED
-18	3D	  	  	C-5 i24
-  	  	  	  	---
-18	3D	  	  	C-5 i24
-  	  	  	  	---
-18	3D	  	  	C-5 i24
-18	3D	  	  	C-5 i24
-10	17	04	FF	A#1 i16 vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-10	17	04	FF	A#1 i16 vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-18	3D	03	ED	C-5 i24 porED
-18	3D	  	  	C-5 i24
-10	17	04	FF	A#1 i16 vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-10	17	04	FF	A#1 i16 vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
-  	  	04	FF	--- vibFF
+10	17	04	02	A#1 i16 vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+10	17	04	02	A#1 i16 vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
 18	3D	03	ED	C-5 i24 porED
 18	3D	  	  	C-5 i24
   	  	  	  	---
@@ -54398,262 +54334,326 @@
   	  	  	  	---
 18	3D	  	  	C-5 i24
 18	3D	  	  	C-5 i24
-08	17	07	0A	A#1 i08 wav0A
-08	17	07	0A	A#1 i08 wav0A
-  	  	07	0A	--- wav0A
-  	  	07	0A	--- wav0A
-19	19	05	81	C-2 i25 AD81
-  	  	05	81	--- AD81
+10	17	04	02	A#1 i16 vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+10	17	04	02	A#1 i16 vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+18	3D	03	ED	C-5 i24 porED
+18	3D	  	  	C-5 i24
+10	17	04	02	A#1 i16 vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+10	17	04	02	A#1 i16 vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+  	  	04	02	--- vib02
+18	3D	03	ED	C-5 i24 porED
+18	3D	  	  	C-5 i24
+  	  	  	  	---
+18	3D	  	  	C-5 i24
+  	  	  	  	---
+18	3D	  	  	C-5 i24
+18	3D	  	  	C-5 i24
+08	17	07	03	A#1 i08 wav03
+08	17	07	03	A#1 i08 wav03
+  	  	07	03	--- wav03
+  	  	07	03	--- wav03
+19	19	05	03	C-2 i25 AD03
+  	  	05	03	--- AD03
 0C	0B	  	  	A#0 i12
   	  	  	  	---
   	  	  	  	---
   	  	  	  	---
-08	17	07	0A	A#1 i08 wav0A
-  	  	07	0A	--- wav0A
+08	17	07	03	A#1 i08 wav03
+  	  	07	03	--- wav03
 18	19	  	  	C-2 i24
   	  	  	  	---
-08	15	07	0A	G#1 i08 wav0A
-  	  	07	0A	--- wav0A
-08	17	07	0A	A#1 i08 wav0A
-08	17	07	0A	A#1 i08 wav0A
-  	  	07	0A	--- wav0A
-  	  	07	0A	--- wav0A
-19	19	05	81	C-2 i25 AD81
-  	  	05	81	--- AD81
+08	15	07	03	G#1 i08 wav03
+  	  	07	03	--- wav03
+08	17	07	03	A#1 i08 wav03
+08	17	07	03	A#1 i08 wav03
+  	  	07	03	--- wav03
+  	  	07	03	--- wav03
+19	19	05	03	C-2 i25 AD03
+  	  	05	03	--- AD03
 0C	0B	  	  	A#0 i12
   	  	  	  	---
   	  	  	  	---
   	  	  	  	---
-08	17	07	0A	A#1 i08 wav0A
-  	  	07	0A	--- wav0A
+08	17	07	03	A#1 i08 wav03
+  	  	07	03	--- wav03
 18	19	  	  	C-2 i24
   	  	  	  	---
-08	15	07	0A	G#1 i08 wav0A
-  	  	07	0A	--- wav0A
-08	13	07	0A	F#1 i08 wav0A
-08	13	07	0A	F#1 i08 wav0A
-  	  	07	0A	--- wav0A
-  	  	07	0A	--- wav0A
-19	19	05	81	C-2 i25 AD81
-  	  	05	81	--- AD81
+08	15	07	03	G#1 i08 wav03
+  	  	07	03	--- wav03
+08	13	07	03	F#1 i08 wav03
+08	13	07	03	F#1 i08 wav03
+  	  	07	03	--- wav03
+  	  	07	03	--- wav03
+19	19	05	03	C-2 i25 AD03
+  	  	05	03	--- AD03
 0C	07	  	  	F#0 i12
   	  	  	  	---
   	  	  	  	---
   	  	  	  	---
-08	13	07	0A	F#1 i08 wav0A
-  	  	07	0A	--- wav0A
+08	13	07	03	F#1 i08 wav03
+  	  	07	03	--- wav03
 18	3D	  	  	C-5 i24
   	  	  	  	---
-08	12	07	0A	F-1 i08 wav0A
-  	  	07	0A	--- wav0A
-08	1C	07	0A	D#2 i08 wav0A
-08	1C	07	0A	D#2 i08 wav0A
-  	  	07	0A	--- wav0A
-  	  	07	0A	--- wav0A
-19	19	05	81	C-2 i25 AD81
-  	  	05	81	--- AD81
+08	12	07	03	F-1 i08 wav03
+  	  	07	03	--- wav03
+08	1C	07	03	D#2 i08 wav03
+08	1C	07	03	D#2 i08 wav03
+  	  	07	03	--- wav03
+  	  	07	03	--- wav03
+19	19	05	03	C-2 i25 AD03
+  	  	05	03	--- AD03
 0C	10	  	  	D#1 i12
   	  	  	  	---
   	  	  	  	---
   	  	  	  	---
-08	15	07	0A	G#1 i08 wav0A
-  	  	07	0A	--- wav0A
+08	15	07	03	G#1 i08 wav03
+  	  	07	03	--- wav03
 18	3D	  	  	C-5 i24
   	  	  	  	---
-08	15	07	0A	G#1 i08 wav0A
-  	  	07	0A	--- wav0A
-08	17	07	0A	A#1 i08 wav0A
-08	17	07	0A	A#1 i08 wav0A
-  	  	07	0A	--- wav0A
-  	  	07	0A	--- wav0A
-19	19	05	81	C-2 i25 AD81
-  	  	05	81	--- AD81
+08	15	07	03	G#1 i08 wav03
+  	  	07	03	--- wav03
+08	17	07	03	A#1 i08 wav03
+08	17	07	03	A#1 i08 wav03
+  	  	07	03	--- wav03
+  	  	07	03	--- wav03
+19	19	05	03	C-2 i25 AD03
+  	  	05	03	--- AD03
 0C	0B	  	  	A#0 i12
   	  	  	  	---
   	  	  	  	---
   	  	  	  	---
-08	17	07	0A	A#1 i08 wav0A
-  	  	07	0A	--- wav0A
+08	17	07	03	A#1 i08 wav03
+  	  	07	03	--- wav03
 18	19	  	  	C-2 i24
   	  	  	  	---
-08	15	07	0A	G#1 i08 wav0A
-  	  	07	0A	--- wav0A
-08	17	07	0A	A#1 i08 wav0A
-08	17	07	0A	A#1 i08 wav0A
-  	  	07	0A	--- wav0A
-  	  	07	0A	--- wav0A
-19	19	05	81	C-2 i25 AD81
-  	  	05	81	--- AD81
+08	15	07	03	G#1 i08 wav03
+  	  	07	03	--- wav03
+08	17	07	03	A#1 i08 wav03
+08	17	07	03	A#1 i08 wav03
+  	  	07	03	--- wav03
+  	  	07	03	--- wav03
+19	19	05	03	C-2 i25 AD03
+  	  	05	03	--- AD03
 0C	0B	  	  	A#0 i12
   	  	  	  	---
   	  	  	  	---
   	  	  	  	---
-08	17	07	0A	A#1 i08 wav0A
-  	  	07	0A	--- wav0A
+08	17	07	03	A#1 i08 wav03
+  	  	07	03	--- wav03
 18	19	  	  	C-2 i24
   	  	  	  	---
-08	15	07	0A	G#1 i08 wav0A
-  	  	07	0A	--- wav0A
-08	13	07	0A	F#1 i08 wav0A
-08	13	07	0A	F#1 i08 wav0A
-  	  	07	0A	--- wav0A
-  	  	07	0A	--- wav0A
-19	19	05	81	C-2 i25 AD81
-  	  	05	81	--- AD81
+08	15	07	03	G#1 i08 wav03
+  	  	07	03	--- wav03
+08	13	07	03	F#1 i08 wav03
+08	13	07	03	F#1 i08 wav03
+  	  	07	03	--- wav03
+  	  	07	03	--- wav03
+19	19	05	03	C-2 i25 AD03
+  	  	05	03	--- AD03
 0C	07	  	  	F#0 i12
   	  	  	  	---
   	  	  	  	---
   	  	  	  	---
-08	13	07	0A	F#1 i08 wav0A
-  	  	07	0A	--- wav0A
+08	13	07	03	F#1 i08 wav03
+  	  	07	03	--- wav03
 18	3D	  	  	C-5 i24
   	  	  	  	---
-08	12	07	0A	F-1 i08 wav0A
-  	  	07	0A	--- wav0A
-08	1C	07	0A	D#2 i08 wav0A
-08	1C	07	0A	D#2 i08 wav0A
-  	  	07	0A	--- wav0A
-  	  	07	0A	--- wav0A
-19	19	05	81	C-2 i25 AD81
-  	  	05	81	--- AD81
+08	12	07	03	F-1 i08 wav03
+  	  	07	03	--- wav03
+08	1C	07	03	D#2 i08 wav03
+08	1C	07	03	D#2 i08 wav03
+  	  	07	03	--- wav03
+  	  	07	03	--- wav03
+19	19	05	03	C-2 i25 AD03
+  	  	05	03	--- AD03
 0C	10	  	  	D#1 i12
   	  	  	  	---
   	  	  	  	---
   	  	  	  	---
-08	15	07	0A	G#1 i08 wav0A
-  	  	07	0A	--- wav0A
+08	15	07	03	G#1 i08 wav03
+  	  	07	03	--- wav03
 18	3D	  	  	C-5 i24
   	  	  	  	---
-08	15	07	0A	G#1 i08 wav0A
-  	  	07	0A	--- wav0A
-08	17	07	0A	A#1 i08 wav0A
-08	17	07	0A	A#1 i08 wav0A
-  	  	07	0A	--- wav0A
-  	  	07	0A	--- wav0A
-19	19	05	81	C-2 i25 AD81
-  	  	05	81	--- AD81
+08	15	07	03	G#1 i08 wav03
+  	  	07	03	--- wav03
+08	17	07	03	A#1 i08 wav03
+08	17	07	03	A#1 i08 wav03
+  	  	07	03	--- wav03
+  	  	07	03	--- wav03
+19	19	05	03	C-2 i25 AD03
+  	  	05	03	--- AD03
 0C	0B	  	  	A#0 i12
   	  	  	  	---
   	  	  	  	---
   	  	  	  	---
-08	17	07	0A	A#1 i08 wav0A
-  	  	07	0A	--- wav0A
+08	17	07	03	A#1 i08 wav03
+  	  	07	03	--- wav03
 18	19	  	  	C-2 i24
   	  	  	  	---
-08	15	07	0A	G#1 i08 wav0A
-  	  	07	0A	--- wav0A
-08	17	07	0A	A#1 i08 wav0A
-08	17	07	0A	A#1 i08 wav0A
-  	  	07	0A	--- wav0A
-  	  	07	0A	--- wav0A
-19	19	05	81	C-2 i25 AD81
-  	  	05	81	--- AD81
+08	15	07	03	G#1 i08 wav03
+  	  	07	03	--- wav03
+08	17	07	03	A#1 i08 wav03
+08	17	07	03	A#1 i08 wav03
+  	  	07	03	--- wav03
+  	  	07	03	--- wav03
+19	19	05	03	C-2 i25 AD03
+  	  	05	03	--- AD03
 0C	0B	  	  	A#0 i12
   	  	  	  	---
   	  	  	  	---
   	  	  	  	---
-08	17	07	0A	A#1 i08 wav0A
-  	  	07	0A	--- wav0A
+08	17	07	03	A#1 i08 wav03
+  	  	07	03	--- wav03
 18	19	  	  	C-2 i24
   	  	  	  	---
-08	15	07	0A	G#1 i08 wav0A
-  	  	07	0A	--- wav0A
-08	13	07	0A	F#1 i08 wav0A
-08	13	07	0A	F#1 i08 wav0A
-  	  	07	0A	--- wav0A
-  	  	07	0A	--- wav0A
-19	19	05	81	C-2 i25 AD81
-  	  	05	81	--- AD81
+08	15	07	03	G#1 i08 wav03
+  	  	07	03	--- wav03
+08	13	07	03	F#1 i08 wav03
+08	13	07	03	F#1 i08 wav03
+  	  	07	03	--- wav03
+  	  	07	03	--- wav03
+19	19	05	03	C-2 i25 AD03
+  	  	05	03	--- AD03
 0C	07	  	  	F#0 i12
   	  	  	  	---
   	  	  	  	---
   	  	  	  	---
-08	13	07	0A	F#1 i08 wav0A
-  	  	07	0A	--- wav0A
+08	13	07	03	F#1 i08 wav03
+  	  	07	03	--- wav03
 18	3D	  	  	C-5 i24
   	  	  	  	---
-08	12	07	0A	F-1 i08 wav0A
-  	  	07	0A	--- wav0A
-08	1C	07	0A	D#2 i08 wav0A
-08	1C	07	0A	D#2 i08 wav0A
-  	  	07	0A	--- wav0A
-  	  	07	0A	--- wav0A
-19	19	05	81	C-2 i25 AD81
-  	  	05	81	--- AD81
+08	12	07	03	F-1 i08 wav03
+  	  	07	03	--- wav03
+08	1C	07	03	D#2 i08 wav03
+08	1C	07	03	D#2 i08 wav03
+  	  	07	03	--- wav03
+  	  	07	03	--- wav03
+19	19	05	03	C-2 i25 AD03
+  	  	05	03	--- AD03
 0C	10	  	  	D#1 i12
   	  	  	  	---
   	  	  	  	---
   	  	  	  	---
-08	15	07	0A	G#1 i08 wav0A
-  	  	07	0A	--- wav0A
+08	15	07	03	G#1 i08 wav03
+  	  	07	03	--- wav03
 18	3D	  	  	C-5 i24
   	  	  	  	---
-08	15	07	0A	G#1 i08 wav0A
-  	  	07	0A	--- wav0A
-08	17	07	0A	A#1 i08 wav0A
-08	17	07	0A	A#1 i08 wav0A
-  	  	07	0A	--- wav0A
-  	  	07	0A	--- wav0A
-19	19	05	81	C-2 i25 AD81
-  	  	05	81	--- AD81
+08	15	07	03	G#1 i08 wav03
+  	  	07	03	--- wav03
+08	17	07	03	A#1 i08 wav03
+08	17	07	03	A#1 i08 wav03
+  	  	07	03	--- wav03
+  	  	07	03	--- wav03
+19	19	05	03	C-2 i25 AD03
+  	  	05	03	--- AD03
 0C	0B	  	  	A#0 i12
   	  	  	  	---
   	  	  	  	---
   	  	  	  	---
-08	17	07	0A	A#1 i08 wav0A
-  	  	07	0A	--- wav0A
+08	17	07	03	A#1 i08 wav03
+  	  	07	03	--- wav03
 18	19	  	  	C-2 i24
   	  	  	  	---
-08	15	07	0A	G#1 i08 wav0A
-  	  	07	0A	--- wav0A
-08	17	07	0A	A#1 i08 wav0A
-08	17	07	0A	A#1 i08 wav0A
-  	  	07	0A	--- wav0A
-  	  	07	0A	--- wav0A
-19	19	05	81	C-2 i25 AD81
-  	  	05	81	--- AD81
+08	15	07	03	G#1 i08 wav03
+  	  	07	03	--- wav03
+08	17	07	03	A#1 i08 wav03
+08	17	07	03	A#1 i08 wav03
+  	  	07	03	--- wav03
+  	  	07	03	--- wav03
+19	19	05	03	C-2 i25 AD03
+  	  	05	03	--- AD03
 0C	0B	  	  	A#0 i12
   	  	  	  	---
   	  	  	  	---
   	  	  	  	---
-08	17	07	0A	A#1 i08 wav0A
-  	  	07	0A	--- wav0A
+08	17	07	03	A#1 i08 wav03
+  	  	07	03	--- wav03
 18	19	  	  	C-2 i24
   	  	  	  	---
-08	15	07	0A	G#1 i08 wav0A
-  	  	07	0A	--- wav0A
-08	13	07	0A	F#1 i08 wav0A
-08	13	07	0A	F#1 i08 wav0A
-  	  	07	0A	--- wav0A
-  	  	07	0A	--- wav0A
-19	19	05	81	C-2 i25 AD81
-  	  	05	81	--- AD81
+08	15	07	03	G#1 i08 wav03
+  	  	07	03	--- wav03
+08	13	07	03	F#1 i08 wav03
+08	13	07	03	F#1 i08 wav03
+  	  	07	03	--- wav03
+  	  	07	03	--- wav03
+19	19	05	03	C-2 i25 AD03
+  	  	05	03	--- AD03
 0C	07	  	  	F#0 i12
   	  	  	  	---
   	  	  	  	---
   	  	  	  	---
-08	13	07	0A	F#1 i08 wav0A
-  	  	07	0A	--- wav0A
+08	13	07	03	F#1 i08 wav03
+  	  	07	03	--- wav03
 18	3D	  	  	C-5 i24
   	  	  	  	---
-08	12	07	0A	F-1 i08 wav0A
-  	  	07	0A	--- wav0A
-08	1C	07	0A	D#2 i08 wav0A
-08	1C	07	0A	D#2 i08 wav0A
-  	  	07	0A	--- wav0A
-  	  	07	0A	--- wav0A
-19	19	05	81	C-2 i25 AD81
-  	  	05	81	--- AD81
+08	12	07	03	F-1 i08 wav03
+  	  	07	03	--- wav03
+08	1C	07	03	D#2 i08 wav03
+08	1C	07	03	D#2 i08 wav03
+  	  	07	03	--- wav03
+  	  	07	03	--- wav03
+19	19	05	03	C-2 i25 AD03
+  	  	05	03	--- AD03
 0C	10	  	  	D#1 i12
   	  	  	  	---
   	  	  	  	---
   	  	  	  	---
-08	15	07	0A	G#1 i08 wav0A
-  	  	07	0A	--- wav0A
+08	15	07	03	G#1 i08 wav03
+  	  	07	03	--- wav03
 18	3D	  	  	C-5 i24
   	  	  	  	---
-08	15	07	0A	G#1 i08 wav0A
-  	  	07	0A	--- wav0A
+08	15	07	03	G#1 i08 wav03
+  	  	07	03	--- wav03
 17	3D	  	  	C-5 i23
   	  	  	  	---
 17	3D	  	  	C-5 i23
@@ -54782,70 +54782,70 @@
   	  	  	  	---
 13	3D	01	37	C-5 i19 sld37
   	  	01	37	--- sld37
-08	17	07	0A	A#1 i08 wav0A
-08	17	07	0A	A#1 i08 wav0A
-  	  	07	0A	--- wav0A
-  	  	07	0A	--- wav0A
-19	19	05	81	C-2 i25 AD81
-  	  	05	81	--- AD81
+08	17	07	03	A#1 i08 wav03
+08	17	07	03	A#1 i08 wav03
+  	  	07	03	--- wav03
+  	  	07	03	--- wav03
+19	19	05	03	C-2 i25 AD03
+  	  	05	03	--- AD03
 0C	0B	  	  	A#0 i12
   	  	  	  	---
   	  	  	  	---
   	  	  	  	---
-08	17	07	0A	A#1 i08 wav0A
-  	  	07	0A	--- wav0A
+08	17	07	03	A#1 i08 wav03
+  	  	07	03	--- wav03
 18	19	  	  	C-2 i24
   	  	  	  	---
-08	15	07	0A	G#1 i08 wav0A
-  	  	07	0A	--- wav0A
-08	17	07	0A	A#1 i08 wav0A
-08	17	07	0A	A#1 i08 wav0A
-  	  	07	0A	--- wav0A
-  	  	07	0A	--- wav0A
-19	19	05	81	C-2 i25 AD81
-  	  	05	81	--- AD81
+08	15	07	03	G#1 i08 wav03
+  	  	07	03	--- wav03
+08	17	07	03	A#1 i08 wav03
+08	17	07	03	A#1 i08 wav03
+  	  	07	03	--- wav03
+  	  	07	03	--- wav03
+19	19	05	03	C-2 i25 AD03
+  	  	05	03	--- AD03
 0C	0B	  	  	A#0 i12
   	  	  	  	---
   	  	  	  	---
   	  	  	  	---
-08	17	07	0A	A#1 i08 wav0A
-  	  	07	0A	--- wav0A
+08	17	07	03	A#1 i08 wav03
+  	  	07	03	--- wav03
 18	19	  	  	C-2 i24
   	  	  	  	---
-08	15	07	0A	G#1 i08 wav0A
-  	  	07	0A	--- wav0A
-08	13	07	0A	F#1 i08 wav0A
-08	13	07	0A	F#1 i08 wav0A
-  	  	07	0A	--- wav0A
-  	  	07	0A	--- wav0A
-19	19	05	81	C-2 i25 AD81
-  	  	05	81	--- AD81
+08	15	07	03	G#1 i08 wav03
+  	  	07	03	--- wav03
+08	13	07	03	F#1 i08 wav03
+08	13	07	03	F#1 i08 wav03
+  	  	07	03	--- wav03
+  	  	07	03	--- wav03
+19	19	05	03	C-2 i25 AD03
+  	  	05	03	--- AD03
 0C	07	  	  	F#0 i12
   	  	  	  	---
   	  	  	  	---
   	  	  	  	---
-08	13	07	0A	F#1 i08 wav0A
-  	  	07	0A	--- wav0A
+08	13	07	03	F#1 i08 wav03
+  	  	07	03	--- wav03
 18	3D	  	  	C-5 i24
   	  	  	  	---
-08	12	07	0A	F-1 i08 wav0A
-  	  	07	0A	--- wav0A
-08	1C	07	0A	D#2 i08 wav0A
-08	1C	07	0A	D#2 i08 wav0A
-  	  	07	0A	--- wav0A
-  	  	07	0A	--- wav0A
-19	19	05	81	C-2 i25 AD81
-  	  	05	81	--- AD81
+08	12	07	03	F-1 i08 wav03
+  	  	07	03	--- wav03
+08	1C	07	03	D#2 i08 wav03
+08	1C	07	03	D#2 i08 wav03
+  	  	07	03	--- wav03
+  	  	07	03	--- wav03
+19	19	05	03	C-2 i25 AD03
+  	  	05	03	--- AD03
 0C	10	  	  	D#1 i12
   	  	  	  	---
   	  	  	  	---
   	  	  	  	---
-08	15	07	0A	G#1 i08 wav0A
-  	  	07	0A	--- wav0A
+08	15	07	03	G#1 i08 wav03
+  	  	07	03	--- wav03
 18	3D	  	  	C-5 i24
   	  	  	  	---
-08	15	07	0A	G#1 i08 wav0A
-  	  	07	0A	--- wav0A
+08	15	07	03	G#1 i08 wav03
+  	  	07	03	--- wav03
 02	1F	03	E2	F#2 i02 porE2
   	  	  	  	---
   	  	  	  	---
@@ -54854,30 +54854,30 @@
   	  	  	  	---
   	  	  	  	---
   	  	  	  	---
-  	61	04	0D	OFF vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
+  	61	04	01	OFF vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
 02	21	03	E2	G#2 i02 porE2
   	  	  	  	---
   	  	  	  	---
@@ -54886,30 +54886,30 @@
   	  	  	  	---
   	  	  	  	---
   	  	  	  	---
-  	61	04	0D	OFF vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
+  	61	04	01	OFF vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
 02	1F	03	E2	F#2 i02 porE2
   	  	  	  	---
   	  	  	  	---
@@ -54918,30 +54918,30 @@
   	  	  	  	---
   	  	  	  	---
   	  	  	  	---
-  	61	04	0D	OFF vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
+  	61	04	01	OFF vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
 02	21	03	E2	G#2 i02 porE2
   	  	  	  	---
   	  	  	  	---
@@ -54950,30 +54950,30 @@
   	  	  	  	---
   	  	  	  	---
   	  	  	  	---
-  	61	04	0D	OFF vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
+  	61	04	01	OFF vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
 02	1F	03	E2	F#2 i02 porE2
   	  	  	  	---
   	  	  	  	---
@@ -54982,30 +54982,30 @@
   	  	  	  	---
   	  	  	  	---
   	  	  	  	---
-  	61	04	0D	OFF vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
+  	61	04	01	OFF vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
 02	21	03	E2	G#2 i02 porE2
   	  	  	  	---
   	  	  	  	---
@@ -55014,30 +55014,30 @@
   	  	  	  	---
   	  	  	  	---
   	  	  	  	---
-  	61	04	0D	OFF vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
+  	61	04	01	OFF vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
 02	22	03	E2	A-2 i02 porE2
   	  	  	  	---
   	  	  	  	---
@@ -55046,30 +55046,30 @@
   	  	  	  	---
   	  	  	  	---
   	  	  	  	---
-  	61	04	0D	OFF vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
+  	61	04	01	OFF vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
 02	27	03	E2	D-3 i02 porE2
   	  	  	  	---
   	  	  	  	---
@@ -55078,14 +55078,14 @@
   	  	  	  	---
   	  	  	  	---
   	  	  	  	---
-  	61	04	0D	OFF vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
+  	61	04	01	OFF vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
 02	29	03	E2	E-3 i02 porE2
   	  	  	  	---
   	  	  	  	---
@@ -55094,30 +55094,30 @@
   	  	  	  	---
   	  	  	  	---
   	  	  	  	---
-  	61	04	0D	OFF vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
-  	  	04	0D	--- vib0D
+  	61	04	01	OFF vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
+  	  	04	01	--- vib01
 08	3D	  	  	C-5 i08
-  	  	05	FF	--- ADFF
-  	  	05	FF	--- ADFF
-  	  	05	FF	--- ADFF
+  	  	05	  	--- AD00
+  	  	05	  	--- AD00
+  	  	05	  	--- AD00
   	  	  	  	---
-  	  	05	FF	--- ADFF
-  	  	05	FF	--- ADFF
-  	  	05	FF	--- ADFF
-  	  	05	FF	--- ADFF
-  	  	05	FF	--- ADFF
-  	  	05	FF	--- ADFF
-  	  	05	FF	--- ADFF
-  	  	05	FF	--- ADFF
-  	  	05	FF	--- ADFF
-  	  	05	FF	--- ADFF
-  	  	05	FF	--- ADFF
+  	  	05	  	--- AD00
+  	  	05	  	--- AD00
+  	  	05	  	--- AD00
+  	  	05	  	--- AD00
+  	  	05	  	--- AD00
+  	  	05	  	--- AD00
+  	  	05	  	--- AD00
+  	  	05	  	--- AD00
+  	  	05	  	--- AD00
+  	  	05	  	--- AD00
+  	  	05	  	--- AD00
   	  	03	  	--- por00
   	  	  	  	---
   	  	  	  	---
@@ -55358,7 +55358,7 @@
   	  	  	  	---
 11	15	03	F0	G#1 i17 porF0
 11	15	03	F0	G#1 i17 porF0
-01	3A	08	F4	A-4 i01 arpF4
+01	3A	08	02	A-4 i01 arp02
   	  	  	  	---
   	  	  	  	---
   	  	  	  	---
@@ -55486,7 +55486,7 @@
   	  	  	  	---
   	  	  	  	---
   	  	03	F2	--- porF2
-01	3A	08	F4	A-4 i01 arpF4
+01	3A	08	02	A-4 i01 arp02
   	  	  	  	---
   	  	  	  	---
   	  	  	  	---
@@ -57278,7 +57278,7 @@
   	  	  	  	---
   	  	  	  	---
   	  	  	  	---
-05	43	08	F4	F#5 i05 arpF4
+05	43	08	02	F#5 i05 arp02
   	  	03	07	--- por07
   	  	  	  	---
   	  	  	  	---
@@ -57470,7 +57470,7 @@
   	  	  	  	---
   	  	  	  	---
   	  	  	  	---
-05	43	08	F4	F#5 i05 arpF4
+05	43	08	02	F#5 i05 arp02
   	  	03	07	--- por07
   	  	  	  	---
   	  	  	  	---
@@ -59006,7 +59006,7 @@
   	  	  	  	---
   	  	  	  	---
   	  	  	  	---
-01	3A	08	F4	A-4 i01 arpF4
+01	3A	08	02	A-4 i01 arp02
   	  	  	  	---
   	  	  	  	---
   	  	  	  	---
@@ -59134,7 +59134,7 @@
   	  	  	  	---
   	  	  	  	---
   	  	03	F2	--- porF2
-01	3A	08	F4	A-4 i01 arpF4
+01	3A	08	02	A-4 i01 arp02
   	  	  	  	---
   	  	  	  	---
   	  	  	  	---
@@ -59390,7 +59390,7 @@
   	  	  	  	---
   	  	  	  	---
   	  	  	  	---
-01	3A	08	F4	A-4 i01 arpF4
+01	3A	08	02	A-4 i01 arp02
   	  	  	  	---
   	  	  	  	---
   	  	  	  	---
@@ -59454,7 +59454,7 @@
   	  	  	  	---
   	  	  	  	---
   	  	03	F2	--- porF2
-01	3A	08	F4	A-4 i01 arpF4
+01	3A	08	02	A-4 i01 arp02
   	  	  	  	---
   	  	  	  	---
   	  	  	  	---
@@ -59518,7 +59518,7 @@
   	  	  	  	---
   	  	  	  	---
   	  	03	F2	--- porF2
-01	3A	08	F4	A-4 i01 arpF4
+01	3A	08	02	A-4 i01 arp02
   	  	  	  	---
   	  	  	  	---
   	  	  	  	---
@@ -59582,7 +59582,7 @@
   	  	  	  	---
   	  	  	  	---
   	  	03	F2	--- porF2
-01	3A	08	F4	A-4 i01 arpF4
+01	3A	08	02	A-4 i01 arp02
   	  	  	  	---
   	  	  	  	---
   	  	  	  	---

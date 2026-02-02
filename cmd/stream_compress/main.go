@@ -331,19 +331,20 @@ type SongTables struct {
 	arp         []byte
 }
 
-// Vibrato lookup table (10 depths × 16 positions)
+// Vibrato lookup table (10 depths × 16 positions, frequency-sorted)
 // Matches player's vibrato_table in odin_player.inc
+// Frequency order: 4(22) 2(13) 3(11) 1(6) 6(2) 10(1) 5(1) 8(1) 15(1)
 var vibratoTable = []byte{
 	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // depth 0
-	0x00, 0x02, 0x03, 0x05, 0x06, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x0f, 0x10, 0x10, // depth 1
-	0x00, 0x03, 0x06, 0x09, 0x0c, 0x0f, 0x12, 0x14, 0x17, 0x19, 0x1b, 0x1c, 0x1e, 0x1f, 0x1f, 0x20, // depth 2
-	0x00, 0x05, 0x09, 0x0e, 0x12, 0x17, 0x1b, 0x1e, 0x22, 0x25, 0x28, 0x2a, 0x2c, 0x2e, 0x2f, 0x30, // depth 3
-	0x00, 0x06, 0x0c, 0x13, 0x18, 0x1e, 0x24, 0x29, 0x2d, 0x31, 0x35, 0x38, 0x3b, 0x3d, 0x3f, 0x40, // depth 4
-	0x00, 0x08, 0x10, 0x17, 0x1f, 0x26, 0x2c, 0x33, 0x39, 0x3e, 0x43, 0x47, 0x4a, 0x4d, 0x4e, 0x50, // depth 5
-	0x00, 0x09, 0x13, 0x1c, 0x25, 0x2d, 0x35, 0x3d, 0x44, 0x4a, 0x50, 0x55, 0x59, 0x5c, 0x5e, 0x60, // depth 6
-	0x00, 0x0d, 0x19, 0x25, 0x31, 0x3c, 0x47, 0x51, 0x5b, 0x63, 0x6a, 0x71, 0x76, 0x7a, 0x7e, 0x7f, // depth 7 (old 8)
-	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x66, 0x71, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x9f, // depth 8 (old 10)
-	0x00, 0x18, 0x2f, 0x46, 0x5c, 0x71, 0x85, 0x98, 0xaa, 0xba, 0xc8, 0xd4, 0xde, 0xe6, 0xeb, 0xef, // depth 9 (old 15)
+	0x00, 0x06, 0x0c, 0x13, 0x18, 0x1e, 0x24, 0x29, 0x2d, 0x31, 0x35, 0x38, 0x3b, 0x3d, 0x3f, 0x40, // new 1 = old depth 4
+	0x00, 0x03, 0x06, 0x09, 0x0c, 0x0f, 0x12, 0x14, 0x17, 0x19, 0x1b, 0x1c, 0x1e, 0x1f, 0x1f, 0x20, // new 2 = old depth 2
+	0x00, 0x05, 0x09, 0x0e, 0x12, 0x17, 0x1b, 0x1e, 0x22, 0x25, 0x28, 0x2a, 0x2c, 0x2e, 0x2f, 0x30, // new 3 = old depth 3
+	0x00, 0x02, 0x03, 0x05, 0x06, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x0f, 0x10, 0x10, // new 4 = old depth 1
+	0x00, 0x09, 0x13, 0x1c, 0x25, 0x2d, 0x35, 0x3d, 0x44, 0x4a, 0x50, 0x55, 0x59, 0x5c, 0x5e, 0x60, // new 5 = old depth 6
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x66, 0x71, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x9f, // new 6 = old depth 10
+	0x00, 0x08, 0x10, 0x17, 0x1f, 0x26, 0x2c, 0x33, 0x39, 0x3e, 0x43, 0x47, 0x4a, 0x4d, 0x4e, 0x50, // new 7 = old depth 5
+	0x00, 0x0d, 0x19, 0x25, 0x31, 0x3c, 0x47, 0x51, 0x5b, 0x63, 0x6a, 0x71, 0x76, 0x7a, 0x7e, 0x7f, // new 8 = old depth 8
+	0x00, 0x18, 0x2f, 0x46, 0x5c, 0x71, 0x85, 0x98, 0xaa, 0xba, 0xc8, 0xd4, 0xde, 0xe6, 0xeb, 0xef, // new 9 = old depth 15
 }
 
 // SID frequency table from player (indices 0-103, includes 8 extended entries)
@@ -530,6 +531,25 @@ const (
 	FILTERTABLE_SZ  = 234   // Filter table size
 )
 
+// Effect parameter unmap tables (convert remapped indices back to original values)
+// These match the remap tables in odin_player.inc
+var adUnmap = []byte{0x08, 0x09, 0x48, 0x0A}             // effect 7 (AD)
+var srUnmap = []byte{0xF9, 0x0D, 0xFF, 0xF8, 0x0F, 0x0E} // effect 4 (SR)
+var waveUnmap = []byte{0xFF, 0x80, 0x43, 0x81}           // effect 5 (wave)
+var resoUnmap = []byte{0xF1, 0x00, 0xF4, 0xF0, 0xF2, 0x52, 0xF5} // effect 8 (reso)
+
+// Vibrato depth unmap: new depth index (1-9) -> original depth (0,4,2,3,1,6,10,5,8,15)
+// Index 0 = depth 0, indices 1-9 are frequency-sorted
+var vibDepthUnmap = []byte{0, 4, 2, 3, 1, 6, 10, 5, 8, 15}
+
+// unmapParam converts a remapped effect param back to its original value
+func unmapParam(param byte, table []byte) byte {
+	if int(param) < len(table) {
+		return table[param]
+	}
+	return param // return as-is if out of bounds
+}
+
 // simulateStreamPlayer runs a frame-exact player simulation using extracted stream data
 // This simulates the actual player's behavior including instrument arpeggio tables
 func simulateStreamPlayer(streams [3][]byte, transpose [3][]int8, songBoundaries []int) [3][]uint16 {
@@ -664,8 +684,8 @@ func simulateStreamPlayer(streams [3][]byte, transpose [3][]int8, songBoundaries
 						}
 					}
 
-					// For portamento (effect 3), set target but don't change current freq
-					if effect == 3 {
+					// For portamento (new effect 2), set target but don't change current freq
+					if effect == 2 {
 						idx := state[ch].note + int(trans)
 						if idx >= 0 && idx < len(freqTableLo) {
 							state[ch].portaTarget = uint16(freqTableLo[idx]) | uint16(freqTableHi[idx])<<8
@@ -680,11 +700,11 @@ func simulateStreamPlayer(streams [3][]byte, transpose [3][]int8, songBoundaries
 					state[ch].note = -1
 				}
 
-				// Update effect (tracker effect 4 sets vibrato params)
+				// Update effect (tracker effect A=10 sets vibrato params)
 				if effect > 0 {
 					state[ch].effect = effect
 					state[ch].param = param
-					if effect == 4 {
+					if effect == 10 { // Vibrato (new effect A = old effect 4)
 						state[ch].vibDepth = int(param >> 4)
 						state[ch].vibSpeed = int(param & 0x0F)
 					}
@@ -718,8 +738,8 @@ func simulateStreamPlayer(streams [3][]byte, transpose [3][]int8, songBoundaries
 				trans = transpose[ch][order]
 			}
 
-			// Process arpeggio table (unless portamento effect)
-			if s.effect != 3 && songIdx < len(songs) {
+			// Process arpeggio table (unless portamento effect 2)
+			if s.effect != 2 && songIdx < len(songs) {
 				sd := songs[songIdx]
 				if s.inst > 0 && len(sd.instData) > s.inst*INST_SIZE+INST_ARPLOOP && len(sd.arpTable) > s.arpIdx {
 					// Read arp value
@@ -749,8 +769,12 @@ func simulateStreamPlayer(streams [3][]byte, transpose [3][]int8, songBoundaries
 
 			// Apply tracker effects (new effect numbers: 1=arp, 2=porta, 9=slideup)
 			switch s.effect {
-			case 9: // Slide up (old effect 1 -> new effect 9)
-				s.freq += uint16(s.param)
+			case 9: // Slide (old effect 1 -> new 9), param: 0=up, 1=down
+				if s.param == 0 {
+					s.freq += 0x20
+				} else if s.freq > 0x20 {
+					s.freq -= 0x20
+				}
 			case 2: // Portamento (old effect 3 -> new effect 2)
 				if s.portaTarget > s.freq {
 					newFreq := s.freq + uint16(s.param)
@@ -1263,9 +1287,9 @@ func runSideBySideValidation(streams [3][]byte, transpose [3][]int8, songBoundar
 
 					if note > 0 && note < 0x61 {
 						simState[ch].note = note - 1
-						// For portamento (effect 3): only set notefreq as target (not freq)
+						// For portamento (new effect 2): only set notefreq as target (not freq)
 						// This matches player's set_notefreq_only
-						if simState[ch].effect == 3 {
+						if simState[ch].effect == 2 {
 							idx := simState[ch].note + int(trans)
 							if idx >= 0 && idx < len(freqTableLo) {
 								simState[ch].noteFreq = uint16(freqTableLo[idx]) | uint16(freqTableHi[idx])<<8
@@ -1324,7 +1348,7 @@ func runSideBySideValidation(streams [3][]byte, transpose [3][]int8, songBoundar
 				}
 
 				// Track portamento - check target vs start to detect extreme slides from the beginning
-				if s.effect == 3 {
+				if s.effect == 2 { // Portamento is new effect 2
 					if s.portaFrames == 0 {
 						s.portaStart = s.freq // Record starting frequency
 					}
@@ -1352,8 +1376,8 @@ func runSideBySideValidation(streams [3][]byte, transpose [3][]int8, songBoundar
 					trans = transpose[ch][transIdx]
 				}
 
-				// Process wave table - updates s.waveform (unless effect 7 overrides it)
-				if s.effect != 7 && s.inst > 0 && len(sd.instData) > s.inst*INST_SIZE+INST_WAVELOOP && len(sd.waveTable) > s.waveIdx {
+				// Process wave table - updates s.waveform (unless effect 5 set waveform overrides it)
+				if s.effect != 5 && s.inst > 0 && len(sd.instData) > s.inst*INST_SIZE+INST_WAVELOOP && len(sd.waveTable) > s.waveIdx {
 					s.waveform = sd.waveTable[s.waveIdx]
 					s.waveIdx++
 					waveEnd := int(sd.instData[s.inst*INST_SIZE+INST_WAVEEND])
@@ -1374,8 +1398,8 @@ func runSideBySideValidation(streams [3][]byte, transpose [3][]int8, songBoundar
 					drumFrame[ch] = true // Ring modulation = drum
 				}
 
-				// Process instrument (arpeggio and vibrato setup)
-				if s.effect != 3 {
+				// Process instrument (arpeggio and vibrato setup) - skip arp if portamento (effect 2)
+				if s.effect != 2 {
 					if s.inst > 0 && len(sd.instData) > s.inst*INST_SIZE+INST_ARPLOOP && len(sd.arpTable) > s.arpIdx {
 						arpVal := int(sd.arpTable[s.arpIdx])
 						if arpVal >= 0x80 {
@@ -1448,12 +1472,20 @@ func runSideBySideValidation(streams [3][]byte, transpose [3][]int8, songBoundar
 
 				// Apply effects (frequency-sorted: 1=arp, 2=porta, 3=Fxx, 4=SR, 5=wave, 6=down, 7=AD, 8=reso, 9=up, A=vib)
 				switch s.effect {
-				case 9: // Slide up (old effect 1 -> new 9)
+				case 9: // Slide (old effect 1 -> new 9), param: 0=up, 1=down
 					s.slideEnable = true
-					s.slideDelta += 0x20
-				case 6: // Slide down (old effect 2 -> new 6)
-					s.slideEnable = true
-					s.slideDelta -= 0x20
+					if s.param == 0 {
+						s.slideDelta += 0x20
+					} else {
+						s.slideDelta -= 0x20
+					}
+				case 6: // Pulse width (old effect 2 -> new 6)
+					var pwVal byte
+					if s.param != 0 {
+						pwVal = 0x80
+					}
+					s.plsWidthLo = (pwVal << 4) & 0xFF
+					s.plsWidthHi = pwVal >> 4
 				case 2: // Portamento (old effect 3 -> new 2)
 					// Player uses chn_notefreq as target, which is set by:
 					// - set_notefreq_only when new note with effect=2
@@ -1481,12 +1513,12 @@ func runSideBySideValidation(streams [3][]byte, transpose [3][]int8, songBoundar
 				case 10: // Vibrato (old effect 4 -> new A)
 					s.vibDepth = int(s.param & 0xF0) // high nibble as-is
 					s.vibSpeed = int(s.param & 0x0F)
-				case 7: // Set AD (old effect 7 -> new 7, unchanged)
-					s.ad = s.param
+				case 7: // Set AD (old effect 7 -> new 7)
+					s.ad = unmapParam(s.param, adUnmap)
 				case 4: // Set SR (old effect 8 -> new 4)
-					s.sr = s.param
+					s.sr = unmapParam(s.param, srUnmap)
 				case 5: // Set waveform (old effect 9 -> new 5)
-					s.waveform = s.param
+					s.waveform = unmapParam(s.param, waveUnmap)
 				case 1: // Arpeggio (old effect A -> new 1)
 					arpX := int(s.param >> 4)
 					arpY := int(s.param & 0x0F)
@@ -1505,7 +1537,7 @@ func runSideBySideValidation(streams [3][]byte, transpose [3][]int8, songBoundar
 						s.noteFreq = s.freq
 					}
 				case 8: // Filter resonance (old effect E -> new 8)
-					filterResonance = s.param
+					filterResonance = unmapParam(s.param, resoUnmap)
 				case 3: // Extended Fxx (old effect F -> new 3)
 					if speedCounter == 0 && s.param >= 0x80 {
 						highNibble := s.param & 0xF0
@@ -1617,7 +1649,7 @@ func runSideBySideValidation(streams [3][]byte, transpose [3][]int8, songBoundar
 
 				// For MIDI output: portamento as two notes (start/end), switch to target after 25%
 				outputFreq := s.noteFreq
-				if s.effect == 3 && s.portaStart > 0 && s.noteFreq > 0 {
+				if s.effect == 2 && s.portaStart > 0 && s.noteFreq > 0 { // Portamento is new effect 2
 					// Switch point at 25% of the way from start to target
 					switchFreq := int(s.portaStart) + (int(s.noteFreq)-int(s.portaStart))/4
 					if (s.portaStart < s.noteFreq && int(s.freq) < switchFreq) ||
@@ -1678,10 +1710,10 @@ func runSideBySideValidation(streams [3][]byte, transpose [3][]int8, songBoundar
 								if noteByte&0x80 != 0 {
 									// Note has bit 7 set - always hard restart
 									doHR = true
-								} else if effect != 3 {
-									// Not portamento - hard restart
+								} else if effect != 2 {
+									// Not portamento (new effect 2) - hard restart
 									instEffByte := instEff & 0xE0
-									if instEffByte != 0x60 { // $60 = effect 3
+									if instEffByte != 0x40 { // $40 = effect 2 << 5
 										doHR = true
 									}
 								}
@@ -2219,7 +2251,7 @@ func runStreamOnlySimulation(streams []intStream, idxToNote []int) SIDRegisters 
 
 					if note > 0 && note < 0x61 {
 						simState[ch].note = note - 1
-						if simState[ch].effect == 3 {
+						if simState[ch].effect == 2 { // Portamento (new effect 2)
 							idx := simState[ch].note + int(trans)
 							if idx >= 0 && idx < len(freqTableLo) {
 								simState[ch].noteFreq = uint16(freqTableLo[idx]) | uint16(freqTableHi[idx])<<8
@@ -2249,7 +2281,7 @@ func runStreamOnlySimulation(streams []intStream, idxToNote []int) SIDRegisters 
 						firsttrackrow = int(param)
 						forcenewpattern = true
 					}
-					if effect == 0x09 {
+					if effect == 0x0C { // Effect C = position jump (old B)
 						nextordernumber = int(param)
 						forcenewpattern = true
 					}
@@ -2269,8 +2301,8 @@ func runStreamOnlySimulation(streams []intStream, idxToNote []int) SIDRegisters 
 					trans = int8(transposeStream[ch][transIdx])
 				}
 
-				// Wave table
-				if s.effect != 7 && slotIdx >= 0 && slotIdx < len(slots) && len(slots[slotIdx].instDef) > INST_WAVELOOP && s.waveIdx < len(slots[slotIdx].waveData) {
+				// Wave table (skip if set waveform effect is active)
+				if s.effect != 5 && slotIdx >= 0 && slotIdx < len(slots) && len(slots[slotIdx].instDef) > INST_WAVELOOP && s.waveIdx < len(slots[slotIdx].waveData) {
 					s.waveform = slots[slotIdx].waveData[s.waveIdx]
 					s.waveIdx++
 					waveEnd := int(slots[slotIdx].instDef[INST_WAVEEND])
@@ -2312,8 +2344,8 @@ func runStreamOnlySimulation(streams []intStream, idxToNote []int) SIDRegisters 
 					}
 				}
 
-				// Arp table - apply transpose from stream at runtime
-				if s.effect != 3 {
+				// Arp table - apply transpose from stream at runtime (skip if portamento)
+				if s.effect != 2 {
 					if slotIdx >= 0 && slotIdx < len(slots) && len(slots[slotIdx].instDef) > INST_ARPLOOP && s.arpIdx < len(slots[slotIdx].arpData) {
 						arpVal := int(slots[slotIdx].arpData[s.arpIdx])
 						if arpVal >= 0x80 {
@@ -2348,12 +2380,20 @@ func runStreamOnlySimulation(streams []intStream, idxToNote []int) SIDRegisters 
 
 				// Effects (frequency-sorted: 1=arp, 2=porta, 3=Fxx, 4=SR, 5=wave, 6=down, 7=AD, 8=reso, 9=up, A=vib)
 				switch s.effect {
-				case 9: // Slide up (old effect 1 -> new 9)
+				case 9: // Slide (old effect 1 -> new 9), param: 0=up, 1=down
 					s.slideEnable = true
-					s.slideDelta += 0x20
-				case 6: // Slide down (old effect 2 -> new 6)
-					s.slideEnable = true
-					s.slideDelta -= 0x20
+					if s.param == 0 {
+						s.slideDelta += 0x20
+					} else {
+						s.slideDelta -= 0x20
+					}
+				case 6: // Pulse width (old effect 2 -> new 6)
+					var pwVal byte
+					if s.param != 0 {
+						pwVal = 0x80
+					}
+					s.plsWidthLo = (pwVal << 4) & 0xFF
+					s.plsWidthHi = pwVal >> 4
 				case 2: // Portamento (old effect 3 -> new 2)
 					deltaLo := (s.param << 4) & 0xFF
 					deltaHi := s.param >> 4
@@ -2378,12 +2418,12 @@ func runStreamOnlySimulation(streams []intStream, idxToNote []int) SIDRegisters 
 				case 10: // Vibrato (old effect 4 -> new A)
 					s.vibDepth = int(s.param & 0xF0)
 					s.vibSpeed = int(s.param & 0x0F)
-				case 7: // Set AD (old effect 7 -> new 7, unchanged)
-					s.ad = s.param
+				case 7: // Set AD (old effect 7 -> new 7)
+					s.ad = unmapParam(s.param, adUnmap)
 				case 4: // Set SR (old effect 8 -> new 4)
-					s.sr = s.param
+					s.sr = unmapParam(s.param, srUnmap)
 				case 5: // Set waveform (old effect 9 -> new 5)
-					s.waveform = s.param
+					s.waveform = unmapParam(s.param, waveUnmap)
 				case 1: // Arpeggio (old effect A -> new 1)
 					arpX := int(s.param >> 4)
 					arpY := int(s.param & 0x0F)
@@ -2402,7 +2442,7 @@ func runStreamOnlySimulation(streams []intStream, idxToNote []int) SIDRegisters 
 						s.noteFreq = s.freq
 					}
 				case 8: // Filter resonance (old effect E -> new 8)
-					filterResonance = s.param
+					filterResonance = unmapParam(s.param, resoUnmap)
 				case 3: // Extended Fxx (old effect F -> new 3)
 					if speedCounter == 0 && s.param >= 0x80 {
 						highNibble := int(s.param & 0xF0)
@@ -2496,9 +2536,9 @@ func runStreamOnlySimulation(streams []intStream, idxToNote []int) SIDRegisters 
 								doHR := false
 								if noteByte&0x80 != 0 {
 									doHR = true
-								} else if effect != 3 {
+								} else if effect != 2 { // Portamento is new effect 2
 									instEffByte := instEff & 0xE0
-									if instEffByte != 0x60 {
+									if instEffByte != 0x40 { // $40 = effect 2 << 5
 										doHR = true
 									}
 								}

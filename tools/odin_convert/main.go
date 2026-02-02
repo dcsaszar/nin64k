@@ -282,6 +282,56 @@ func countEffectUsage(raw []byte) [16]int {
 	return counts
 }
 
+// countEffectParams returns parameter value counts for each effect type (0-15)
+// Returns map[effect][param]count
+func countEffectParams(raw []byte) map[int]map[int]int {
+	result := make(map[int]map[int]int)
+	for i := 0; i < 16; i++ {
+		result[i] = make(map[int]int)
+	}
+
+	baseAddr := int(raw[2]) << 8
+	trackLo0Off := int(readWord(raw, codeTrackLo0)) - baseAddr
+	trackHi0Off := int(readWord(raw, codeTrackHi0)) - baseAddr
+	trackLo1Off := int(readWord(raw, codeTrackLo1)) - baseAddr
+	trackHi1Off := int(readWord(raw, codeTrackHi1)) - baseAddr
+	trackLo2Off := int(readWord(raw, codeTrackLo2)) - baseAddr
+	trackHi2Off := int(readWord(raw, codeTrackHi2)) - baseAddr
+	trackLoOff := []int{trackLo0Off, trackLo1Off, trackLo2Off}
+	trackHiOff := []int{trackHi0Off, trackHi1Off, trackHi2Off}
+
+	patternAddrs := make(map[uint16]bool)
+	for order := 0; order < 256; order++ {
+		for ch := 0; ch < 3; ch++ {
+			if trackLoOff[ch]+order >= len(raw) || trackHiOff[ch]+order >= len(raw) {
+				continue
+			}
+			lo := raw[trackLoOff[ch]+order]
+			hi := raw[trackHiOff[ch]+order]
+			addr := uint16(lo) | uint16(hi)<<8
+			srcOff := int(addr) - baseAddr
+			if srcOff >= 0 && srcOff+192 <= len(raw) {
+				patternAddrs[addr] = true
+			}
+		}
+	}
+
+	for addr := range patternAddrs {
+		srcOff := int(addr) - baseAddr
+		for row := 0; row < 64; row++ {
+			off := srcOff + row*3
+			byte0 := raw[off]
+			byte1 := raw[off+1]
+			byte2 := raw[off+2]
+			effect := int((byte1 >> 5) | ((byte0 >> 4) & 8))
+			if effect != 0 {
+				result[effect][int(byte2)]++
+			}
+		}
+	}
+	return result
+}
+
 // analyzeTableDupes checks for duplicate ranges in wave/arp tables
 func analyzeTableDupes(raw []byte) {
 	baseAddr := int(raw[2]) << 8
@@ -1233,12 +1283,13 @@ func convertToNewFormat(raw []byte, songNum int, prevTables *PrevSongTables, eff
 	return out, stats
 }
 
-// remapPatternEffects remaps effect numbers in pattern data
+// remapPatternEffects remaps effect numbers and parameters in pattern data
 func remapPatternEffects(pattern []byte, remap [16]byte) {
 	for row := 0; row < 64; row++ {
 		off := row * 3
 		byte0 := pattern[off]
 		byte1 := pattern[off+1]
+		byte2 := pattern[off+2]
 		// Extract old effect: (byte1 >> 5) | ((byte0 >> 4) & 8)
 		oldEffect := (byte1 >> 5) | ((byte0 >> 4) & 8)
 		newEffect := remap[oldEffect]
@@ -1247,6 +1298,53 @@ func remapPatternEffects(pattern []byte, remap [16]byte) {
 		byte1 = (byte1 & 0x1F) | ((newEffect & 7) << 5)
 		pattern[off] = byte0
 		pattern[off+1] = byte1
+		// Remap effect parameters for specific effects
+		// Old effect 1 (slide): $80/$81 -> 0 (up), $00 -> 1 (down)
+		if oldEffect == 1 {
+			if byte2&0x80 != 0 {
+				byte2 = 0 // up
+			} else {
+				byte2 = 1 // down
+			}
+			pattern[off+2] = byte2
+		}
+		// Old effect 2 (pulse width): $00 -> 0, $80 -> 1
+		if oldEffect == 2 {
+			if byte2 == 0x80 {
+				byte2 = 1
+			} else {
+				byte2 = 0
+			}
+			pattern[off+2] = byte2
+		}
+		// Old effect 7 (AD): $08 -> 0, $09 -> 1, $48 -> 2, $0A -> 3
+		if oldEffect == 7 {
+			adRemap := map[byte]byte{0x08: 0, 0x09: 1, 0x48: 2, 0x0A: 3}
+			if v, ok := adRemap[byte2]; ok {
+				pattern[off+2] = v
+			}
+		}
+		// Old effect 8 (SR): $F9 -> 0, $0D -> 1, $FF -> 2, $F8 -> 3, $0F -> 4, $0E -> 5
+		if oldEffect == 8 {
+			srRemap := map[byte]byte{0xF9: 0, 0x0D: 1, 0xFF: 2, 0xF8: 3, 0x0F: 4, 0x0E: 5}
+			if v, ok := srRemap[byte2]; ok {
+				pattern[off+2] = v
+			}
+		}
+		// Old effect 9 (wave): $FF -> 0, $80 -> 1, $43 -> 2, $81 -> 3
+		if oldEffect == 9 {
+			waveRemap := map[byte]byte{0xFF: 0, 0x80: 1, 0x43: 2, 0x81: 3}
+			if v, ok := waveRemap[byte2]; ok {
+				pattern[off+2] = v
+			}
+		}
+		// Old effect E (reso): $F1 -> 0, $00 -> 1, $F4 -> 2, $F0 -> 3, $F2 -> 4, $52 -> 5, $F5 -> 6
+		if oldEffect == 0xE {
+			resoRemap := map[byte]byte{0xF1: 0, 0x00: 1, 0xF4: 2, 0xF0: 3, 0xF2: 4, 0x52: 5, 0xF5: 6}
+			if v, ok := resoRemap[byte2]; ok {
+				pattern[off+2] = v
+			}
+		}
 	}
 }
 
@@ -2779,6 +2877,60 @@ func main() {
 		}
 	}
 	fmt.Println(")")
+
+	// Analyze effect parameter distributions
+	effectNames := []string{"0", "1(slide)", "2(pulse)", "3(porta)", "4(vib)", "5", "6", "7(AD)", "8(SR)", "9(wave)", "A(arp)", "B(jump)", "C", "D(break)", "E(reso)", "F(ext)"}
+	allEffectParams := make(map[int]map[int]int)
+	for i := 0; i < 16; i++ {
+		allEffectParams[i] = make(map[int]int)
+	}
+	for songNum := 1; songNum <= 9; songNum++ {
+		if songData[songNum-1] == nil {
+			continue
+		}
+		songParams := countEffectParams(songData[songNum-1])
+		for eff := 0; eff < 16; eff++ {
+			for param, count := range songParams[eff] {
+				allEffectParams[eff][param] += count
+			}
+		}
+	}
+	fmt.Println("Effect parameter analysis:")
+	for eff := 1; eff < 16; eff++ {
+		if len(allEffectParams[eff]) == 0 {
+			continue
+		}
+		type pv struct {
+			param int
+			count int
+		}
+		var pvs []pv
+		total := 0
+		for p, c := range allEffectParams[eff] {
+			pvs = append(pvs, pv{p, c})
+			total += c
+		}
+		sort.Slice(pvs, func(i, j int) bool {
+			return pvs[i].count > pvs[j].count
+		})
+		fmt.Printf("  %s: %d unique values, %d total uses\n", effectNames[eff], len(pvs), total)
+		if len(pvs) <= 20 {
+			fmt.Printf("    ")
+			for i, pv := range pvs {
+				if i > 0 {
+					fmt.Printf(" ")
+				}
+				fmt.Printf("$%02X(%d)", pv.param, pv.count)
+			}
+			fmt.Println()
+		} else {
+			fmt.Printf("    top 10:")
+			for i := 0; i < 10 && i < len(pvs); i++ {
+				fmt.Printf(" $%02X(%d)", pvs[i].param, pvs[i].count)
+			}
+			fmt.Println()
+		}
+	}
 	fmt.Println()
 
 	// Convert all songs with cross-song table deduplication
