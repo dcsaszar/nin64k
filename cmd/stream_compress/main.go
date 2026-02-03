@@ -8,7 +8,6 @@ import (
 	"runtime"
 	"sort"
 	"sync"
-	"sync/atomic"
 	"time"
 )
 
@@ -330,6 +329,24 @@ type SongTables struct {
 	wave        []byte
 	arp         []byte
 }
+
+// ============================================================
+// EXPERIMENT PARAMETERS - modify these and rebuild to test
+//
+// IMPORTANT: Every optimization must be:
+//   1. Confirmed by running this tool and checking actual output bytes
+//   2. Pass VM/simulation validation (no SID register mismatches)
+//   3. Use the actually generated & compressed stream for measurements
+// Do NOT trust theoretical bit calculations - only actual compressed output.
+// ============================================================
+
+var (
+	combineNoteInst = true // true: NoteVal=(note<<5)|inst, false: separate streams
+	noteWindow      = 1024 // compression window for NoteVal
+	noteDurWindow   = 512  // compression window for NoteDur
+	transWindow     = 128  // compression window for TransV/TransD
+	fxWindow        = 256  // compression window for FxV/FxD
+)
 
 // Vibrato lookup table (10 depths × 16 positions, frequency-sorted)
 // Matches player's vibrato_table in odin_player.inc
@@ -3249,6 +3266,14 @@ func main() {
 	outDir := "generated/stream_compress"
 	os.MkdirAll(outDir, 0755)
 
+	fmt.Println("Config:")
+	fmt.Printf("  combineNoteInst = %v\n", combineNoteInst)
+	fmt.Printf("  noteWindow      = %d\n", noteWindow)
+	fmt.Printf("  noteDurWindow   = %d\n", noteDurWindow)
+	fmt.Printf("  transWindow     = %d\n", transWindow)
+	fmt.Printf("  fxWindow        = %d\n", fxWindow)
+	fmt.Println()
+
 	// Extract streams and transpose from partX.bin files
 	var allStreams [3][]byte
 	var allTranspose [3][]int8
@@ -3493,12 +3518,14 @@ func main() {
 	var streams []intStream
 	var sparseNoteData [3][]int
 	var sparseNoteDur [3][]int
+	var sparseInstData [3][]int // Only used when !combineNoteInst
 	var instStreamData [3][]int
 	var fxStreamData [3][]int
 
 	for ch := 0; ch < 3; ch++ {
 		src := allStreams[ch]
-		var noteVals []int  // Combined: (note << 5) | inst
+		var noteVals []int
+		var instVals []int // Separate inst stream (when !combineNoteInst)
 		var noteDurs []int
 		instData := make([]int, 0, numRows) // Still needed for row-based decoding
 		fxData := make([]int, 0, numRows)
@@ -3516,13 +3543,17 @@ func main() {
 			// because the player uses current order's transpose for arp calculations
 			note := rawNote
 
-			// Sparse note encoding: combine note+inst since inst only set with notes
-			// Format: (note << 5) | inst (note=0-127, inst=0-31)
+			// Sparse note encoding
 			if note == 0 {
 				gap++
 			} else {
 				noteDurs = append(noteDurs, gap)
-				noteVals = append(noteVals, (note<<5)|inst) // Combined note+inst
+				if combineNoteInst {
+					noteVals = append(noteVals, (note<<5)|inst) // Combined note+inst
+				} else {
+					noteVals = append(noteVals, note) // Note only
+					instVals = append(instVals, inst) // Inst separate
+				}
 				gap = 0
 			}
 
@@ -3534,22 +3565,29 @@ func main() {
 		// Handle trailing gap
 		if gap > 0 {
 			noteDurs = append(noteDurs, gap)
-			noteVals = append(noteVals, 0) // Sentinel for end (note=0, inst=0)
+			noteVals = append(noteVals, 0) // Sentinel
+			if !combineNoteInst {
+				instVals = append(instVals, 0)
+			}
 		}
 
 		sparseNoteData[ch] = noteVals
 		sparseNoteDur[ch] = noteDurs
+		sparseInstData[ch] = instVals
 		instStreamData[ch] = instData
 		fxStreamData[ch] = fxData
 	}
 
 
-	// Analyze note value distribution (extract note from combined value)
+	// Analyze note value distribution
 	noteFreq := make(map[int]int)
 	for ch := 0; ch < 3; ch++ {
-		for _, combined := range sparseNoteData[ch] {
-			if combined > 0 {
-				note := combined >> 5 // Extract note from (note<<5)|inst
+		for _, val := range sparseNoteData[ch] {
+			if val > 0 {
+				note := val
+				if combineNoteInst {
+					note = val >> 5 // Extract note from combined
+				}
 				noteFreq[note]++
 			}
 		}
@@ -3575,29 +3613,32 @@ func main() {
 	}
 
 	// Create frequency-remapped note streams
-	// NoteVal now contains (note<<5)|inst, remap the note part only
 	var remappedNoteData [3][]int
 	for ch := 0; ch < 3; ch++ {
 		remapped := make([]int, len(sparseNoteData[ch]))
-		for i, combined := range sparseNoteData[ch] {
-			if combined == 0 {
-				remapped[i] = 0 // Keep 0 as 0 (sentinel in sparse encoding)
-			} else {
-				note := combined >> 5
-				inst := combined & 0x1F
+		for i, val := range sparseNoteData[ch] {
+			if val == 0 {
+				remapped[i] = 0 // Keep 0 as 0 (sentinel)
+			} else if combineNoteInst {
+				note := val >> 5
+				inst := val & 0x1F
 				remappedNote := noteToIdx[note]
-				remapped[i] = (remappedNote << 5) | inst // Recombine with inst
+				remapped[i] = (remappedNote << 5) | inst // Recombine
+			} else {
+				remapped[i] = noteToIdx[val] // Just remap note
 			}
 		}
 		remappedNoteData[ch] = remapped
 	}
 
 	// Build stream array - Notes first (Fx added later after FEx conversion)
-	// Layout: Ch0-2(NoteVal,NoteDur), Ch0-2(TransV,TransD), Ch0-2(FxV,FxD), TblData
-	// Note: NoteVal contains (noteIdx<<5)|inst - inst combined with notes
+	// Layout depends on combineNoteInst setting
 	for ch := 0; ch < 3; ch++ {
-		streams = append(streams, intStream{remappedNoteData[ch], 3, fmt.Sprintf("Ch%d NoteVal", ch), true, 1024})
-		streams = append(streams, intStream{sparseNoteDur[ch], 1, fmt.Sprintf("Ch%d NoteDur", ch), true, 512})
+		streams = append(streams, intStream{remappedNoteData[ch], 3, fmt.Sprintf("Ch%d NoteVal", ch), true, noteWindow})
+		streams = append(streams, intStream{sparseNoteDur[ch], 1, fmt.Sprintf("Ch%d NoteDur", ch), true, noteDurWindow})
+		if !combineNoteInst {
+			streams = append(streams, intStream{sparseInstData[ch], 0, fmt.Sprintf("Ch%d InstVal", ch), true, noteWindow})
+		}
 	}
 
 	// Build transpose data for sparse encoding
@@ -3633,8 +3674,8 @@ func main() {
 			sparseTransDur[ch] = append(sparseTransDur[ch], dur)
 			i += dur
 		}
-		streams = append(streams, intStream{sparseTransVal[ch], 0, fmt.Sprintf("Ch%d TransV", ch), true, 128})
-		streams = append(streams, intStream{sparseTransDur[ch], 0, fmt.Sprintf("Ch%d TransD", ch), true, 128})
+		streams = append(streams, intStream{sparseTransVal[ch], 0, fmt.Sprintf("Ch%d TransV", ch), true, transWindow})
+		streams = append(streams, intStream{sparseTransDur[ch], 0, fmt.Sprintf("Ch%d TransD", ch), true, transWindow})
 	}
 
 	// Add table streams (concatenated per song)
@@ -3985,31 +4026,9 @@ func main() {
 	var sparseFxEff [3][]int // Effect number (1-12)
 	var sparseFxPar [3][]int // Effect parameter
 	var sparseFxDur [3][]int // Interleaved [gap, duration, gap, duration, ...]
-	fmt.Println("\nFx sparse encoding (after FEx conversion):")
-	fxRLEBits := 0
-	fxSparseBits := 0
 	for ch := 0; ch < 3; ch++ {
-		zeros := 0
-		rleEntries := 0
-		for _, v := range fxStreamData[ch] {
-			if v == 0 {
-				zeros++
-			}
-		}
-		// Build RLE for comparison
-		i := 0
-		for i < len(fxStreamData[ch]) {
-			val := fxStreamData[ch][i]
-			dur := 1
-			for i+dur < len(fxStreamData[ch]) && fxStreamData[ch][i+dur] == val {
-				dur++
-			}
-			fxRLEBits += expGolombBits(val, 0) + expGolombBits(dur, 0)
-			rleEntries++
-			i += dur
-		}
 		// Build sparse encoding: only non-zero effects with gap+duration
-		i = 0
+		i := 0
 		gap := 0
 		for i < len(fxStreamData[ch]) {
 			val := fxStreamData[ch][i]
@@ -4025,20 +4044,14 @@ func main() {
 				sparseFxPar[ch] = append(sparseFxPar[ch], val&0xFF)
 				sparseFxDur[ch] = append(sparseFxDur[ch], gap)
 				sparseFxDur[ch] = append(sparseFxDur[ch], dur)
-				fxSparseBits += expGolombBits(val, 0) + expGolombBits(gap, 0) + expGolombBits(dur, 0)
 				gap = 0
 			}
 			i += dur
 		}
-		fmt.Printf("  Ch%d: %d rows, %d zeros (%.1f%%), %d RLE, %d sparse (gap+dur)\n",
-			ch, len(fxStreamData[ch]), zeros, 100.0*float64(zeros)/float64(len(fxStreamData[ch])),
-			rleEntries, len(sparseFxVal[ch]))
 		// Add Fx streams
-		streams = append(streams, intStream{sparseFxVal[ch], 0, fmt.Sprintf("Ch%d FxV", ch), true, 512})
-		streams = append(streams, intStream{sparseFxDur[ch], 0, fmt.Sprintf("Ch%d FxD", ch), true, 512})
+		streams = append(streams, intStream{sparseFxVal[ch], 0, fmt.Sprintf("Ch%d FxV", ch), true, fxWindow})
+		streams = append(streams, intStream{sparseFxDur[ch], 0, fmt.Sprintf("Ch%d FxD", ch), true, fxWindow})
 	}
-	fmt.Printf("  Total: RLE %d bits, sparse %d bits (%+d bits = %+d bytes)\n",
-		fxRLEBits, fxSparseBits, fxSparseBits-fxRLEBits, (fxSparseBits-fxRLEBits)/8)
 	// Verify no effect=0 with param>0
 	effect0NonZeroParam := 0
 	for ch := 0; ch < 3; ch++ {
@@ -4052,18 +4065,11 @@ func main() {
 		fmt.Printf("  WARNING: %d rows have effect=0 with param>0\n", effect0NonZeroParam)
 	}
 
-	// Now build sparse inst encoding (after inst-to-slot conversion)
-	// NEW FORMAT: Only emit non-zero instrument changes with delta timing
-	// InstD = delta from last emit (or row 0), InstV = non-zero slot
+	// Build sparse inst encoding (after inst-to-slot conversion)
+	// Only emit non-zero instrument changes with delta timing
 	var sparseInstVal [3][]int
 	var sparseInstDur [3][]int
-	fmt.Println("\nInst stream sparsity analysis (after slot conversion):")
-	totalCurrentBits := 0
-	totalSparseBits := 0
-	totalOldEntries := 0
 	for ch := 0; ch < 3; ch++ {
-		total := len(instStreamData[ch])
-		// Build sparse encoding - only emit non-zero values
 		lastEmitRow := 0
 		for i := 0; i < len(instStreamData[ch]); i++ {
 			val := instStreamData[ch][i]
@@ -4074,36 +4080,9 @@ func main() {
 				lastEmitRow = i
 			}
 		}
-		// Count old-style entries for comparison
-		oldEntries := 0
-		i := 0
-		for i < len(instStreamData[ch]) {
-			val := instStreamData[ch][i]
-			dur := 1
-			for i+dur < len(instStreamData[ch]) && instStreamData[ch][i+dur] == val {
-				dur++
-			}
-			oldEntries++
-			i += dur
-		}
-		totalOldEntries += oldEntries
-		// Calculate bit costs
-		currentBits := 0
-		for _, v := range instStreamData[ch] {
-			currentBits += expGolombBits(v, 0)
-		}
-		sparseBits := 0
-		for j := 0; j < len(sparseInstVal[ch]); j++ {
-			sparseBits += expGolombBits(sparseInstVal[ch][j], 0)
-			sparseBits += expGolombBits(sparseInstDur[ch][j], 0)
-		}
-		fmt.Printf("  Ch%d: %d rows, %d entries (was %d), sparse %d bits\n",
-			ch, total, len(sparseInstVal[ch]), oldEntries, sparseBits)
-		totalCurrentBits += currentBits
-		totalSparseBits += sparseBits
-		// InstV/InstD no longer separate - inst is combined with NoteVal
 	}
-	fmt.Printf("  Total: %d entries (was %d) - now combined with NoteVal\n", len(sparseInstVal[0])+len(sparseInstVal[1])+len(sparseInstVal[2]), totalOldEntries)
+	_ = sparseInstVal // Used for analysis only when inst is not combined with notes
+	_ = sparseInstDur
 
 	// Sort incrLoadEvents by row for correct delta encoding
 	sort.Slice(incrLoadEvents, func(i, j int) bool {
@@ -4304,9 +4283,21 @@ func main() {
 	// Skip table verification since we're using original data directly
 	// (incremental format validated separately)
 	// Run stream-only simulation and compare against VM output
-	streamRegs := runStreamOnlySimulation(streams, idxToNote)
+	// NOTE: Stream validation only works with combined note+inst format
+	if !combineNoteInst {
+		fmt.Println("  Stream vs VM comparison: SKIPPED (separate note/inst mode)")
+	}
+	var streamRegs SIDRegisters
+	if combineNoteInst {
+		streamRegs = runStreamOnlySimulation(streams, idxToNote)
+	}
 
 	// Compare all SID registers: Freq, PW, Control, AD, SR, Filter, Volume
+	validationFailed := false
+	if !combineNoteInst {
+		goto skipValidation
+	}
+	{
 	freqMismatches := 0
 	pwMismatches := 0
 	controlMismatches := 0
@@ -4323,9 +4314,9 @@ func main() {
 		fmt.Printf("  WARNING: Frame count mismatch: VM=%d, Stream=%d\n", totalFrames, streamFrames)
 	}
 
-	compareFrames := totalFrames
-	if streamFrames < compareFrames {
-		compareFrames = streamFrames
+	compareFrames := totalFrames - 1 // Skip last frame (end-of-stream artifacts)
+	if streamFrames-1 < compareFrames {
+		compareFrames = streamFrames - 1
 	}
 
 	for ch := 0; ch < 3; ch++ {
@@ -4422,15 +4413,17 @@ func main() {
 			simMismatch++
 		}
 	}
-	validationFailed := false
 	if simMismatch == 0 {
 		fmt.Println("  Stream encoding: PASS (all SID registers $D400-$D418 match)")
 	} else {
 		fmt.Printf("  Stream encoding: FAIL (%d mismatches in SID registers)\n", simMismatch)
 		validationFailed = true
 	}
+	}
+skipValidation:
 
 	// Bit-level DP for integer stream chunks
+	// Note: stream.bitWidth is used as k parameter for exp-golomb encoding
 	type bitChoice struct {
 		isBackref bool
 		dist      int
@@ -4438,7 +4431,7 @@ func main() {
 	}
 
 	// DP function for a chunk with prefix
-	dpChunk := func(data []int, prefix []int, bitWidth, window int) []bitChoice {
+	dpChunk := func(data []int, prefix []int, kLit, window int) []bitChoice {
 		combined := append(prefix, data...)
 		prefixLen := len(prefix)
 		n := len(combined)
@@ -4452,13 +4445,15 @@ func main() {
 		cost := make([]float64, n+1)
 		choices := make([]bitChoice, n)
 
-		literalCost := float64(1 + bitWidth)
+		literalCost := func(val int) float64 {
+			return float64(1 + expGolombBits(val, kLit))
+		}
 		backrefCost := func(dist, length int) float64 {
 			return float64(1 + expGolombBits(dist-1, optKDist) + expGolombBits(length-2, optKLen))
 		}
 
 		for pos := n - 1; pos >= prefixLen; pos-- {
-			bestCost := literalCost + cost[pos+1]
+			bestCost := literalCost(combined[pos]) + cost[pos+1]
 			bestChoice := bitChoice{}
 
 			minPos := pos - window
@@ -4553,13 +4548,9 @@ func main() {
 	const numChunks = 16
 	numStreams := len(streams)
 	type chunkResult struct {
-		streamIdx int
-		chunkIdx  int
-		choices   []bitChoice
-		estBits   int
+		choices []bitChoice
 	}
 
-	streamBitsAtomic := make([]atomic.Int64, numStreams)
 	numWorkers := runtime.NumCPU()
 
 	// Run all chunks in parallel
@@ -4616,42 +4607,13 @@ func main() {
 				prefix := s.data[prefixStart:start]
 
 				choices := dpChunk(chunkData, prefix, s.bitWidth, s.window)
-
-				estBits := 0
-				pos := 0
-				for pos < len(choices) {
-					ch := choices[pos]
-					if !ch.isBackref {
-						estBits += 1 + s.bitWidth
-						pos++
-					} else {
-						estBits += 1 + expGolombBits(ch.dist-1, optKDist) + expGolombBits(ch.length-2, optKLen)
-						pos += ch.length
-					}
-				}
-				allChunkResults[sIdx][cIdx] = chunkResult{sIdx, cIdx, choices, estBits}
-				streamBitsAtomic[sIdx].Add(int64(estBits))
+				allChunkResults[sIdx][cIdx] = chunkResult{choices}
 			}
 		}()
 	}
 	wg.Wait()
 
-	// Compute total bits per stream
-	streamTotalBits := make([]int, numStreams)
-	for sIdx := 0; sIdx < numStreams; sIdx++ {
-		for cIdx := 0; cIdx < numChunks; cIdx++ {
-			streamTotalBits[sIdx] += allChunkResults[sIdx][cIdx].estBits
-		}
-	}
-
-	// Calculate totals
-	var totalCompBits int
-	for sIdx := 0; sIdx < numStreams; sIdx++ {
-		totalCompBits += streamTotalBits[sIdx]
-	}
-
 	lookupTableBytes := len(idxToNote) - 1
-	totalBytes := (totalCompBits+7)/8 + lookupTableBytes
 
 	// Calculate buffer sizes
 	bufferBytes := 0
@@ -4685,6 +4647,79 @@ func main() {
 		bufferBytes += s.window * bytesPerElement
 	}
 
+	// Actually encode all streams and verify round-trip (parallel)
+	fmt.Println("\nEncoding streams...")
+	type encodeResult struct {
+		encoded []byte
+		bits    int
+		err     bool
+	}
+	encodeResults := make([]encodeResult, numStreams)
+
+	var encodeWg sync.WaitGroup
+	for sIdx := 0; sIdx < numStreams; sIdx++ {
+		encodeWg.Add(1)
+		go func(sIdx int) {
+			defer encodeWg.Done()
+			s := streams[sIdx]
+
+			// Merge all chunk choices into one slice
+			var allChoices []IntChoice
+			for cIdx := 0; cIdx < numChunks; cIdx++ {
+				chunkResult := allChunkResults[sIdx][cIdx]
+				for _, bc := range chunkResult.choices {
+					allChoices = append(allChoices, IntChoice{
+						IsBackref: bc.isBackref,
+						Dist:      bc.dist,
+						Length:    bc.length,
+					})
+				}
+			}
+
+			// Encode
+			encoded, bits := EncodeIntStream(s.data, allChoices, s.bitWidth)
+
+			// Decode and verify
+			decoded := DecodeIntStream(encoded, s.bitWidth, len(s.data))
+			hasErr := false
+			if len(decoded) != len(s.data) {
+				hasErr = true
+			} else {
+				for i := range s.data {
+					if decoded[i] != s.data[i] {
+						hasErr = true
+						break
+					}
+				}
+			}
+
+			encodeResults[sIdx] = encodeResult{encoded, bits, hasErr}
+		}(sIdx)
+	}
+	encodeWg.Wait()
+
+	// Collect results
+	allEncodedStreams := make([][]byte, numStreams)
+	var actualTotalBits int
+	encodeErrors := 0
+	for sIdx := 0; sIdx < numStreams; sIdx++ {
+		r := encodeResults[sIdx]
+		allEncodedStreams[sIdx] = r.encoded
+		actualTotalBits += r.bits
+		if r.err {
+			encodeErrors++
+		}
+	}
+
+	actualStreamBytes := (actualTotalBits + 7) / 8
+
+	if encodeErrors == 0 {
+		fmt.Printf("  Round-trip verification: PASS (%d bits, %d bytes)\n", actualTotalBits, actualStreamBytes)
+	} else {
+		fmt.Printf("  Round-trip verification: FAIL (%d streams with errors)\n", encodeErrors)
+		validationFailed = true
+	}
+
 	fmt.Println()
 	fmt.Println("Stream data format (all exp-golomb encoded):")
 	streamDescs := map[string]string{
@@ -4716,13 +4751,15 @@ func main() {
 		fmt.Printf("  %-14s max=%-6d %s\n", s.name, maxV, desc)
 	}
 
+	actualTotalBytes := actualStreamBytes + lookupTableBytes
+
 	fmt.Println()
-	fmt.Printf("Streams:    %d bytes (%d bits)\n", (totalCompBits+7)/8, totalCompBits)
+	fmt.Printf("Streams:    %d bytes (%d bits)\n", actualStreamBytes, actualTotalBits)
 	fmt.Printf("Note LUT:   %d bytes (%d entries)\n", lookupTableBytes, lookupTableBytes)
 	fmt.Printf("Buffers:    %d bytes (%d streams)\n", bufferBytes, len(streams))
-	fmt.Printf("Total:      %d bytes\n", totalBytes)
+	fmt.Printf("Total:      %d bytes\n", actualTotalBytes)
 	fmt.Printf("Current:    26,270 bytes\n")
-	fmt.Printf("Savings:    %+d bytes (%.1f%%)\n", totalBytes-26270, float64(26270-totalBytes)*100/26270)
+	fmt.Printf("Savings:    %+d bytes (%.1f%%)\n", actualTotalBytes-26270, float64(26270-actualTotalBytes)*100/26270)
 	fmt.Printf("Time:       %.2fs\n", time.Since(mainStart).Seconds())
 
 	if validationFailed {

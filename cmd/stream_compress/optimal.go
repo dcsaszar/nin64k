@@ -1072,3 +1072,123 @@ func (c *CrossChannelCompressor) encodeChannel(ch int) ([]byte, CompressStats) {
 
 	return out, stats
 }
+
+type IntChoice struct {
+	IsBackref bool
+	Dist      int
+	Length    int
+}
+
+func EncodeIntStream(data []int, choices []IntChoice, kLit int) ([]byte, int) {
+	var out []byte
+	bitPos := 0
+
+	writeBits := func(val, count int) {
+		for i := count - 1; i >= 0; i-- {
+			if bitPos%8 == 0 {
+				out = append(out, 0)
+			}
+			if (val>>i)&1 == 1 {
+				out[len(out)-1] |= 1 << (7 - bitPos%8)
+			}
+			bitPos++
+		}
+	}
+
+	writeGamma := func(n int) {
+		b := bits.Len(uint(n + 1))
+		for i := 0; i < b-1; i++ {
+			writeBits(0, 1)
+		}
+		writeBits(n+1, b)
+	}
+
+	writeExpGolomb := func(n, k int) {
+		writeGamma(n >> k)
+		writeBits(n&((1<<k)-1), k)
+	}
+
+	pos := 0
+	for pos < len(data) {
+		ch := choices[pos]
+		if !ch.IsBackref {
+			writeBits(0, 1)
+			writeExpGolomb(data[pos], kLit)
+			pos++
+		} else {
+			writeBits(1, 1)
+			writeExpGolomb(ch.Dist-1, optKDist)
+			writeExpGolomb(ch.Length-2, optKLen)
+			pos += ch.Length
+		}
+	}
+
+	writeBits(1, 1)
+	writeExpGolomb(4095, optKDist)
+
+	totalBits := bitPos
+	for bitPos%8 != 0 {
+		writeBits(0, 1)
+	}
+
+	return out, totalBits
+}
+
+func DecodeIntStream(encoded []byte, kLit, expectedLen int) []int {
+	result := make([]int, 0, expectedLen)
+	bitPos := 0
+
+	readBits := func(count int) int {
+		val := 0
+		for i := 0; i < count; i++ {
+			byteIdx := bitPos / 8
+			bitIdx := 7 - (bitPos % 8)
+			if byteIdx < len(encoded) && (encoded[byteIdx]>>bitIdx)&1 == 1 {
+				val |= 1 << (count - 1 - i)
+			}
+			bitPos++
+		}
+		return val
+	}
+
+	readGamma := func() int {
+		zeros := 0
+		for readBits(1) == 0 {
+			zeros++
+		}
+		if zeros == 0 {
+			return 0
+		}
+		return (1<<zeros | readBits(zeros)) - 1
+	}
+
+	readExpGolomb := func(k int) int {
+		q := readGamma()
+		r := readBits(k)
+		return (q << k) | r
+	}
+
+	for len(result) < expectedLen {
+		flag := readBits(1)
+		if flag == 0 {
+			val := readExpGolomb(kLit)
+			result = append(result, val)
+		} else {
+			dist := readExpGolomb(optKDist) + 1
+			if dist > 4095 {
+				break
+			}
+			length := readExpGolomb(optKLen) + 2
+			for i := 0; i < length && len(result) < expectedLen; i++ {
+				srcIdx := len(result) - dist
+				if srcIdx < 0 {
+					result = append(result, 0)
+				} else {
+					result = append(result, result[srcIdx])
+				}
+			}
+		}
+	}
+
+	return result
+}
