@@ -507,6 +507,22 @@ func getPatternPositionJumps(pat []byte) []int {
 	return targets
 }
 
+// getPatternBreakRow returns the first row with a break (0x0D) or position jump (0x0B) effect,
+// or 64 if no such effect exists. Uses original (pre-remap) effect numbers.
+func getPatternBreakRow(pat []byte) int {
+	numRows := len(pat) / 3
+	for row := 0; row < numRows; row++ {
+		off := row * 3
+		byte0 := pat[off]
+		byte1 := pat[off+1]
+		effect := (byte1 >> 5) | ((byte0 >> 4) & 8)
+		if effect == 0x0B || effect == 0x0D {
+			return row
+		}
+	}
+	return 64
+}
+
 // remapPatternPositionJumps rewrites position jump targets using the order mapping
 func remapPatternPositionJumps(pat []byte, orderMap map[int]int) {
 	for row := 0; row < 64; row++ {
@@ -1189,6 +1205,50 @@ func convertToNewFormat(raw []byte, songNum int, prevTables *PrevSongTables, eff
 		patternData[i] = pat
 	}
 
+	// Compute cross-channel truncation limits for each pattern
+	// For each order, find the minimum break row across all 3 channels
+	// For each pattern, the truncation limit is the max across all orders where it's used
+	patternTruncate := make([]int, numPatterns)
+	for i := range patternTruncate {
+		patternTruncate[i] = 0
+	}
+	for _, oldOrder := range reachableOrders {
+		// Get patterns and break rows for all 3 channels at this order
+		var orderPatIdx [3]byte
+		var orderBreakRow [3]int
+		for ch := 0; ch < 3; ch++ {
+			lo := raw[trackLoOff[ch]+oldOrder]
+			hi := raw[trackHiOff[ch]+oldOrder]
+			addr := uint16(lo) | uint16(hi)<<8
+			orderPatIdx[ch] = patternIndex[addr]
+			srcOff := int(addr) - baseAddr
+			if srcOff >= 0 && srcOff+192 <= rawLen {
+				orderBreakRow[ch] = getPatternBreakRow(raw[srcOff : srcOff+192])
+			} else {
+				orderBreakRow[ch] = 64
+			}
+		}
+		// Find min break row across all channels at this order
+		minBreak := orderBreakRow[0]
+		for ch := 1; ch < 3; ch++ {
+			if orderBreakRow[ch] < minBreak {
+				minBreak = orderBreakRow[ch]
+			}
+		}
+		// Update truncation limit for each pattern used at this order
+		// The limit is minBreak + 1 (include the row with the break/jump)
+		truncLimit := minBreak + 1
+		if truncLimit > 64 {
+			truncLimit = 64
+		}
+		for ch := 0; ch < 3; ch++ {
+			idx := int(orderPatIdx[ch])
+			if truncLimit > patternTruncate[idx] {
+				patternTruncate[idx] = truncLimit
+			}
+		}
+	}
+
 	// Extract previous row dictionary for cross-song deduplication
 	var prevDict []byte
 	if prevTables != nil && len(prevTables.RowDict) > 0 {
@@ -1202,7 +1262,7 @@ func convertToNewFormat(raw []byte, songNum int, prevTables *PrevSongTables, eff
 	equivMap := loadSongEquivMap(songNum, dict)
 
 	// Pack patterns with per-song dictionary + RLE
-	dict, packed, patOffsets, primaryCount, extendedCount := packPatternsWithEquiv(patternData, equivMap, prevDict)
+	dict, packed, patOffsets, primaryCount, extendedCount := packPatternsWithEquiv(patternData, equivMap, prevDict, patternTruncate)
 
 	stats.PrimaryIndices = primaryCount
 	stats.ExtendedIndices = extendedCount
@@ -1420,6 +1480,7 @@ func remapPatternEffects(pattern []byte, remap [16]byte) {
 	}
 }
 
+
 // Global caches loaded once
 var globalEquivCache []EquivResult
 var equivCacheLoaded bool
@@ -1552,7 +1613,8 @@ func buildPatternDict(patterns [][]byte, prevDict []byte) (dict []byte, rowToIdx
 }
 
 // packPatternsWithEquiv packs pattern data, using equivalences to reduce extended indices
-func packPatternsWithEquiv(patterns [][]byte, equivMap map[int]int, prevDict []byte) (dict []byte, packed []byte, offsets []uint16, primaryCount int, extendedCount int) {
+// truncateLimits provides cross-channel truncation limits (max reachable row+1 for each pattern)
+func packPatternsWithEquiv(patterns [][]byte, equivMap map[int]int, prevDict []byte, truncateLimits []int) (dict []byte, packed []byte, offsets []uint16, primaryCount int, extendedCount int) {
 	dict, rowToIdx := buildPatternDict(patterns, prevDict)
 
 	// Pack each pattern individually first
@@ -1566,14 +1628,21 @@ func packPatternsWithEquiv(patterns [][]byte, equivMap map[int]int, prevDict []b
 		var patPacked []byte
 		var prevRow [3]byte
 		repeatCount := 0
+		numRows := len(pat) / 3
 
-		for row := 0; row < 64; row++ {
+		// Use cross-channel truncation limit if provided, otherwise use pattern length
+		truncateAfter := numRows
+		if truncateLimits != nil && i < len(truncateLimits) && truncateLimits[i] > 0 && truncateLimits[i] < truncateAfter {
+			truncateAfter = truncateLimits[i]
+		}
+
+		for row := 0; row < truncateAfter; row++ {
 			off := row * 3
 			curRow := [3]byte{pat[off], pat[off+1], pat[off+2]}
 
 			if curRow == prevRow {
 				repeatCount++
-				if repeatCount == rleMax || row == 63 {
+				if repeatCount == rleMax || row == truncateAfter-1 {
 					patPacked = append(patPacked, byte(rleBase+repeatCount-1))
 					repeatCount = 0
 				}
@@ -1764,7 +1833,7 @@ func optimizePackedOverlap(patterns [][]byte) (packed []byte, offsets []uint16) 
 
 // packPatterns packs pattern data using per-song row dictionary + RLE (no equivalence)
 func packPatterns(patterns [][]byte, prevDict []byte) (dict []byte, packed []byte, offsets []uint16, primaryCount int, extendedCount int) {
-	return packPatternsWithEquiv(patterns, nil, prevDict)
+	return packPatternsWithEquiv(patterns, nil, prevDict, nil)
 }
 
 // decodePattern simulates the 6502 decode routine for verification
