@@ -1,4 +1,4 @@
-.PHONY: all clean
+.PHONY: all clean odin_convert
 
 BUILD = ../../build
 
