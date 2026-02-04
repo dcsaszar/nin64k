@@ -825,12 +825,8 @@ effect03:
         rts
 
 effect04:
-        lda     chn_effectpar,x
-        tay
-        and     #$f0
+        lda     #0              ; param always $00, just disable vibrato
         sta     chn_vibdepth,x
-        tya
-        and     #$0f
         sta     chn_vibspeed,x
         rts
 
