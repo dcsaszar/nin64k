@@ -30,7 +30,7 @@ $(PRG): $(OBJ) $(CFG)
 
 run: $(PRG)
 ifdef VICE_BIN
-	$(VICE_BIN)/x64sc -autostartprgmode 1 +confirmonexit $(PRG) &
+	$(VICE_BIN)/x64sc -autostartprgmode 1 +confirmonexit -VICIIborders 2 $(PRG) &
 else
 	@echo "Set VICE_BIN to run in emulator, e.g.: export VICE_BIN=~/path/to/vice/bin"
 endif
