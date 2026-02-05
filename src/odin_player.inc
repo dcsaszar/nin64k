@@ -209,7 +209,7 @@ player_play:
         jmp     @pattern_update
 @skip_pattern:
         ; Check if we should prefetch (speedcounter == speed-1)
-        clc
+        ; (C already 0 from CMP when A < speed)
         adc     #1
         cmp     speed
         bne     @no_prefetch
@@ -565,7 +565,6 @@ fx_haseffect:
         adc     chn_note,x
 @arp_done:
         adc     chn_transpose,x
-        ; Inline set_notefreq_and_freqlo
         tay
         lda     freqtable_lo,y
         sta     chn_notefreqlo,x
@@ -1153,7 +1152,7 @@ dar_not_rle:
         lda     packed_ptrs_addr+1
         sta     zp_ptr+1
         lda     (zp_ptr),y          ; ptr lo
-        clc
+        ; (C already 0: ASL of index < 128 never sets carry)
         adc     zp_packed_data
         sta     zp_temp0
         iny
@@ -1162,7 +1161,7 @@ dar_not_rle:
         sta     zp_temp0+1
         ; Add current source offset
         lda     chn_src_off,x
-        clc
+        ; (C already 0: previous ADC of ptr hi + base hi never overflows)
         adc     zp_temp0
         sta     zp_temp0
         lda     #0

@@ -2296,14 +2296,18 @@ type CPU6502 struct {
 	PC      uint16 // Program counter
 	P       byte   // Status register: NV-BDIZC
 
-	Memory       [65536]byte
-	SIDWrites    []SIDWrite
-	Cycles       uint64
-	CurrentFrame int
-	Coverage     map[uint16]bool // Code coverage
-	DataCoverage map[uint16]bool // Data read coverage
-	DataBase     uint16          // Start of data region to track
-	DataSize     int             // Size of data region
+	Memory        [65536]byte
+	SIDWrites     []SIDWrite
+	Cycles        uint64
+	CurrentFrame  int
+	Coverage      map[uint16]bool // Code coverage
+	DataCoverage  map[uint16]bool // Data read coverage
+	DataBase      uint16          // Start of data region to track
+	DataSize      int             // Size of data region
+	RedundantCLC  map[uint16]int  // Addresses with redundant CLC (C already 0)
+	RedundantSEC  map[uint16]int  // Addresses with redundant SEC (C already 1)
+	TotalCLC      map[uint16]int  // Total CLC executions per address
+	TotalSEC      map[uint16]int  // Total SEC executions per address
 }
 
 // Status flags
@@ -2320,8 +2324,12 @@ const (
 
 func NewCPU() *CPU6502 {
 	cpu := &CPU6502{
-		SP: 0xFF,
-		P:  FlagU | FlagI,
+		SP:           0xFF,
+		P:            FlagU | FlagI,
+		RedundantCLC: make(map[uint16]int),
+		RedundantSEC: make(map[uint16]int),
+		TotalCLC:     make(map[uint16]int),
+		TotalSEC:     make(map[uint16]int),
 	}
 	return cpu
 }
@@ -3072,8 +3080,16 @@ func (c *CPU6502) Step() bool {
 
 	// Flag operations
 	case 0x18: // CLC
+		c.TotalCLC[c.PC-1]++
+		if c.P&FlagC == 0 {
+			c.RedundantCLC[c.PC-1]++
+		}
 		c.P &^= FlagC
 	case 0x38: // SEC
+		c.TotalSEC[c.PC-1]++
+		if c.P&FlagC != 0 {
+			c.RedundantSEC[c.PC-1]++
+		}
 		c.P |= FlagC
 	case 0x58: // CLI
 		c.P &^= FlagI
@@ -3202,6 +3218,10 @@ type result struct {
 	dataCoverage      map[uint16]bool
 	dataBase          uint16
 	dataSize          int
+	redundantCLC      map[uint16]int
+	redundantSEC      map[uint16]int
+	totalCLC          map[uint16]int
+	totalSEC          map[uint16]int
 }
 
 func testSong(songNum int, rawData, convertedData []byte, convStats ConversionStats, playerData []byte) result {
@@ -3259,7 +3279,7 @@ func testSong(songNum int, rawData, convertedData []byte, convStats ConversionSt
 			}
 		}
 	}
-	return result{songNum: songNum, passed: match, writes: len(builtinWrites), builtinCycles: builtinCycles, newCycles: newCycles, builtinMaxCycles: builtinMaxCycles, newMaxCycles: newMaxCycles, origSize: len(rawData), newSize: len(convertedData), convStats: convStats, coverage: cpuNew.Coverage, dataCoverage: cpuNew.DataCoverage, dataBase: playerBase, dataSize: len(playerData)}
+	return result{songNum: songNum, passed: match, writes: len(builtinWrites), builtinCycles: builtinCycles, newCycles: newCycles, builtinMaxCycles: builtinMaxCycles, newMaxCycles: newMaxCycles, origSize: len(rawData), newSize: len(convertedData), convStats: convStats, coverage: cpuNew.Coverage, dataCoverage: cpuNew.DataCoverage, dataBase: playerBase, dataSize: len(playerData), redundantCLC: cpuNew.RedundantCLC, redundantSEC: cpuNew.RedundantSEC, totalCLC: cpuNew.TotalCLC, totalSEC: cpuNew.TotalSEC}
 }
 
 // rebuildPlayer rebuilds player.bin from source after wavetable.inc is generated
@@ -3789,6 +3809,10 @@ func main() {
 	totalPrimary, totalExtended := 0, 0
 	mergedCoverage := make(map[uint16]bool)
 	mergedDataCoverage := make(map[int]bool)
+	mergedRedundantCLC := make(map[uint16]int)
+	mergedRedundantSEC := make(map[uint16]int)
+	mergedTotalCLC := make(map[uint16]int)
+	mergedTotalSEC := make(map[uint16]int)
 	maxDataSize := 0
 	for _, r := range allResults {
 		if r.err != "" {
@@ -3833,6 +3857,18 @@ func main() {
 			}
 			for addr := range r.dataCoverage {
 				mergedDataCoverage[int(addr-r.dataBase)] = true
+			}
+			for addr, count := range r.redundantCLC {
+				mergedRedundantCLC[addr] += count
+			}
+			for addr, count := range r.redundantSEC {
+				mergedRedundantSEC[addr] += count
+			}
+			for addr, count := range r.totalCLC {
+				mergedTotalCLC[addr] += count
+			}
+			for addr, count := range r.totalSEC {
+				mergedTotalSEC[addr] += count
 			}
 			if r.dataSize > maxDataSize {
 				maxDataSize = r.dataSize
@@ -3890,6 +3926,31 @@ func main() {
 		}
 		if len(uncoveredData) > 0 {
 			fmt.Printf("Uncovered data: %s\n", strings.Join(uncoveredData, ", "))
+		}
+
+		// Report 100% redundant CLC/SEC instructions (always redundant across all executions)
+		var redundantAddrs []uint16
+		for addr, redundant := range mergedRedundantCLC {
+			if redundant == mergedTotalCLC[addr] {
+				redundantAddrs = append(redundantAddrs, addr)
+			}
+		}
+		for addr, redundant := range mergedRedundantSEC {
+			if redundant == mergedTotalSEC[addr] {
+				redundantAddrs = append(redundantAddrs, addr)
+			}
+		}
+		if len(redundantAddrs) > 0 {
+			sort.Slice(redundantAddrs, func(i, j int) bool { return redundantAddrs[i] < redundantAddrs[j] })
+			fmt.Println("\nAlways-redundant flag operations:")
+			for _, addr := range redundantAddrs {
+				if count, ok := mergedRedundantCLC[addr]; ok && count == mergedTotalCLC[addr] {
+					fmt.Printf("  $%04X: CLC (C always 0) x%d\n", addr, count)
+				}
+				if count, ok := mergedRedundantSEC[addr]; ok && count == mergedTotalSEC[addr] {
+					fmt.Printf("  $%04X: SEC (C always 1) x%d\n", addr, count)
+				}
+			}
 		}
 
 	} else {
