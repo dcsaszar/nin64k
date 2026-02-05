@@ -23,11 +23,11 @@ zp_decode_dst    = $7C          ; 2 bytes: decode dest pointer (temp)
 ; $000: Instruments (512 bytes) - interleaved: inst N at offset N*16
 ; $200: Transpose ch0-2 (256 bytes each)
 ; $500: Trackptr ch0-2 (256 bytes each)
-; $800: Filtertable (234 bytes max)
-; $8EA: Arptable (188 bytes max)
-; $9A6: Row dictionary (1236 bytes = 412 entries × 3)
-; $E7A: Packed pointers (182 bytes = 91 patterns × 2)
-; $F30: Packed pattern data
+; $800: Filtertable (227 bytes max)
+; $8E3: Arptable (188 bytes max)
+; $99F: Row dictionary (1230 bytes = 410 entries × 3)
+; $E75: Packed pointers (182 bytes = 91 patterns × 2)
+; $F2B: Packed pattern data
 ;
 ; Global wavetable (163 bytes) is stored in player, shared across all songs.
 ; Instrument wave indices point directly into global_wavetable.
@@ -61,9 +61,9 @@ zp_decode_dst    = $7C          ; 2 bytes: decode dest pointer (temp)
 ;   -> effect = (1<<5>>5) | (($00>>4)&8) = 1 | 0 = 1 (arpeggio $49)
 
 ; Pattern packing constants
-ROW_DICT_OFF        = $9A6
-PACKED_PTRS_OFF     = $E7A
-PACKED_DATA_OFF     = $F30
+ROW_DICT_OFF        = $99F
+PACKED_PTRS_OFF     = $E75
+PACKED_DATA_OFF     = $F2B
 
 ; Instrument parameter offsets within 16-byte instrument block
 INST_AD          = 0
@@ -106,8 +106,8 @@ player_init:
         ; Patch table addresses (SMC)
         inx                             ; X = base + 8
         stx     filter_load+2           ; $800 high byte
-        stx     arp_load_addr+1         ; $8EA high byte (same page)
-        lda     #$ea
+        stx     arp_load_addr+1         ; $8E3 high byte (same page)
+        lda     #$e3
         sta     arp_load_addr
         lda     #$00
         sta     filter_load+1
@@ -146,7 +146,7 @@ player_init:
         sta     chn_decoded_row+0
         sta     chn_decoded_row+1
         sta     chn_decoded_row+2
-        ; Set row_dict_addr = song_base + $9D9
+        ; Set row_dict_addr = song_base + ROW_DICT_OFF
         lda     zp_song_base
         clc
         adc     #<ROW_DICT_OFF
@@ -154,7 +154,7 @@ player_init:
         lda     zp_song_base+1
         adc     #>ROW_DICT_OFF
         sta     zp_row_dict+1
-        ; Set packed_ptrs_addr = song_base + $EAD
+        ; Set packed_ptrs_addr = song_base + PACKED_PTRS_OFF
         lda     zp_song_base
         clc
         adc     #<PACKED_PTRS_OFF
@@ -162,7 +162,7 @@ player_init:
         lda     zp_song_base+1
         adc     #>PACKED_PTRS_OFF
         sta     packed_ptrs_addr+1
-        ; Set packed_data = song_base + $F63
+        ; Set packed_data = song_base + PACKED_DATA_OFF
         lda     zp_song_base
         clc
         adc     #<PACKED_DATA_OFF

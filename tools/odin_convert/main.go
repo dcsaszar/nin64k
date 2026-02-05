@@ -1521,11 +1521,11 @@ func convertToNewFormat(raw []byte, songNum int, prevTables *PrevSongTables, eff
 	trackptr0Off := 0x500
 	trackptr1Off := 0x600
 	trackptr2Off := 0x700
-	filterOff := 0x800         // Filter at $800 (234 bytes max)
-	arpOff := 0x8EA            // Arp at $8EA (188 bytes max)
-	rowDictOff := 0x9A6        // Row dictionary (1236 bytes = 412 entries × 3)
-	packedPtrsOff := 0xE7A     // Packed pointers (182 bytes = 91 patterns × 2)
-	packedDataOff := 0xF30     // Packed pattern data
+	filterOff := 0x800         // Filter at $800 (227 bytes max)
+	arpOff := 0x8E3            // Arp at $8E3 (188 bytes max)
+	rowDictOff := 0x99F        // Row dictionary (1230 bytes = 410 entries × 3)
+	packedPtrsOff := 0xE75     // Packed pointers (182 bytes = 91 patterns × 2)
+	packedDataOff := 0xF2B     // Packed pattern data
 
 	// Extract patterns to slice for packing (do effect/order remapping first)
 	patternData := make([][]byte, numPatterns)
@@ -3675,8 +3675,8 @@ func main() {
 		// Extract tables for next song's dedup
 		const (
 			filterOff  = 0x800
-			arpOff     = 0x8EA
-			rowDictOff = 0x9A6
+			arpOff     = 0x8E3
+			rowDictOff = 0x99F
 		)
 		prevTables = &PrevSongTables{
 			Arp:     append([]byte{}, convertedData[arpOff:arpOff+stats.NewArpSize]...),
@@ -3705,7 +3705,7 @@ func main() {
 
 	// Analyze row dict combinations across all songs
 	var totalCombos [8]int
-	const rowDictOffAnalysis = 0x9A6
+	const rowDictOffAnalysis = 0x99F
 	for songNum := 1; songNum <= 9; songNum++ {
 		if convertedSongs[songNum-1] == nil {
 			continue
@@ -3973,7 +3973,7 @@ func testEquivalenceSong(songNum int, convertedData []byte, dictSize int, player
 	nopIdx := -1 // [0,0,0]
 
 	for idx := 0; idx < dictSize; idx++ {
-		dictOff := 0x9A6 + idx*3
+		dictOff := 0x99F + idx*3
 		note := convertedData[dictOff]
 		instEffect := convertedData[dictOff+1]
 		param := convertedData[dictOff+2]
@@ -4015,7 +4015,7 @@ func testEquivalenceSong(songNum int, convertedData []byte, dictSize int, player
 	found := 0
 
 	for extIdx := 224; extIdx < dictSize; extIdx++ {
-		extOff := 0x9A6 + extIdx*3
+		extOff := 0x99F + extIdx*3
 		extNote := convertedData[extOff]
 		extInstEffect := convertedData[extOff+1]
 		extSig := signature{extInstEffect, convertedData[extOff+2]}
@@ -4066,7 +4066,7 @@ func testEquivalenceSong(songNum int, convertedData []byte, dictSize int, player
 			cpu.Restore(snapshot)
 
 			extMemOff := bufferBase + uint16(extOff)
-			priMemOff := bufferBase + 0x9A6 + uint16(cand.idx*3)
+			priMemOff := bufferBase + 0x99F + uint16(cand.idx*3)
 			cpu.Memory[extMemOff] = cpu.Memory[priMemOff]
 			cpu.Memory[extMemOff+1] = cpu.Memory[priMemOff+1]
 			cpu.Memory[extMemOff+2] = cpu.Memory[priMemOff+2]
