@@ -1799,17 +1799,17 @@ func remapPatternEffects(pattern []byte, remap [16]byte, fSubRemap map[int]byte)
 					newEffect = fSubRemap[0x11]
 					newParam = loNib
 				case 0xE0:
-					// Filter trigger -> separate effect
+					// Filter trigger -> separate effect (pre-shifted *16 for player)
 					newEffect = fSubRemap[0x12]
-					newParam = loNib
+					newParam = loNib << 4
 				case 0x80:
 					// Global volume -> separate effect
 					newEffect = fSubRemap[0x13]
 					newParam = loNib
 				case 0x90:
-					// Filter mode -> separate effect
+					// Filter mode -> separate effect (pre-shifted for player)
 					newEffect = fSubRemap[0x14]
-					newParam = loNib
+					newParam = loNib << 4
 				default:
 					newEffect = 0
 					newParam = 0

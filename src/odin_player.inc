@@ -509,19 +509,13 @@ fx_haseffect:
 @fx_exit2:
         jmp     do_slide_vib
 @fx_5:
-        ; Effect 5 = filter trigger (inlined)
+        ; Effect 5 = filter trigger (inlined, param pre-shifted *16)
         lda     speedcounter
         bne     @fx_exit2
         lda     chn_effectpar,x
         beq     @fx_exit2
-        asl
-        asl
-        asl
-        asl
         sta     zp_ptr
-        lda     #0
-        rol
-        adc     zp_song_base+1
+        lda     zp_song_base+1
         sta     zp_ptr+1
         ldy     #INST_FILTSTART
         lda     (zp_ptr),y
@@ -631,24 +625,17 @@ fx_haseffect:
         bcs     @fx_a_b
         cmp     #9
         bcs     @fx_9
-        ; Effect 8 = pulse width (inlined)
+        ; Effect 8 = pulse width (inlined, hardcoded values)
         lda     chn_effectpar,x
-        beq     @pulse_set
-        lda     #$80
-@pulse_set:
-        ; Inline set_pulse_width
-        pha
-        asl     a
-        asl     a
-        asl     a
-        asl     a
-        sta     chn_plswidthlo,x
-        pla
-        lsr     a
-        lsr     a
-        lsr     a
-        lsr     a
+        beq     @pulse_zero
+        lda     #$08                ; param!=0: hi=$08, lo=$00
         sta     chn_plswidthhi,x
+        lda     #$00
+        beq     @pulse_done
+@pulse_zero:
+        sta     chn_plswidthhi,x    ; param==0: hi=$00, lo=$00
+@pulse_done:
+        sta     chn_plswidthlo,x
         jmp     do_slide_vib
 @fx_9:
         ; Effect 9 = set AD (inlined)
@@ -702,14 +689,10 @@ fx_haseffect:
 @fx_exit3:
         jmp     do_slide_vib
 @fx_d:
-        ; Effect D = filter mode (inlined)
+        ; Effect D = filter mode (inlined, param pre-shifted in data)
         lda     speedcounter
         bne     @fx_exit3
         lda     chn_effectpar,x
-        asl     a
-        asl     a
-        asl     a
-        asl     a
         sta     filter_mode
         jmp     do_slide_vib
 @fx_e:
