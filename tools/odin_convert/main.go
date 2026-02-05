@@ -3008,14 +3008,20 @@ func (c *CPU6502) Call(addr uint16) {
 }
 
 // RunFrames runs the play routine for n frames
-func (c *CPU6502) RunFrames(playAddr uint16, frames int) []SIDWrite {
+func (c *CPU6502) RunFrames(playAddr uint16, frames int) ([]SIDWrite, uint64) {
 	c.SIDWrites = nil
 	c.CurrentFrame = 0
+	var maxCyclesPerFrame uint64
 	for i := 0; i < frames; i++ {
 		c.CurrentFrame = i
+		startCycles := c.Cycles
 		c.Call(playAddr)
+		frameCycles := c.Cycles - startCycles
+		if frameCycles > maxCyclesPerFrame {
+			maxCyclesPerFrame = frameCycles
+		}
 	}
-	return c.SIDWrites
+	return c.SIDWrites, maxCyclesPerFrame
 }
 
 // Part times (little-endian frame counts)
@@ -3032,19 +3038,21 @@ var partTimes = []uint16{
 }
 
 type result struct {
-	songNum        int
-	passed         bool
-	writes         int
-	builtinCycles  uint64
-	newCycles      uint64
-	origSize       int
-	newSize        int
-	convStats      ConversionStats
-	err            string
-	coverage       map[uint16]bool
-	dataCoverage   map[uint16]bool
-	dataBase       uint16
-	dataSize       int
+	songNum           int
+	passed            bool
+	writes            int
+	builtinCycles     uint64
+	newCycles         uint64
+	builtinMaxCycles  uint64
+	newMaxCycles      uint64
+	origSize          int
+	newSize           int
+	convStats         ConversionStats
+	err               string
+	coverage          map[uint16]bool
+	dataCoverage      map[uint16]bool
+	dataBase          uint16
+	dataSize          int
 }
 
 func testSong(songNum int, rawData, convertedData []byte, convStats ConversionStats, playerData []byte) result {
@@ -3066,7 +3074,7 @@ func testSong(songNum int, rawData, convertedData []byte, convStats ConversionSt
 	cpuBuiltin.Call(bufferBase)
 	cpuBuiltin.SIDWrites = nil
 	cpuBuiltin.Cycles = 0
-	builtinWrites := cpuBuiltin.RunFrames(playAddr, testFrames)
+	builtinWrites, builtinMaxCycles := cpuBuiltin.RunFrames(playAddr, testFrames)
 	builtinCycles := cpuBuiltin.Cycles
 
 	// Use pre-converted data (with cross-song deduplication applied)
@@ -3086,7 +3094,7 @@ func testSong(songNum int, rawData, convertedData []byte, convStats ConversionSt
 
 	cpuNew.SIDWrites = nil
 	cpuNew.Cycles = 0
-	newWrites := cpuNew.RunFrames(playerBase+3, testFrames)
+	newWrites, newMaxCycles := cpuNew.RunFrames(playerBase+3, testFrames)
 	newCycles := cpuNew.Cycles
 
 	match := bytes.Equal(serializeWrites(builtinWrites), serializeWrites(newWrites))
@@ -3102,7 +3110,7 @@ func testSong(songNum int, rawData, convertedData []byte, convStats ConversionSt
 			}
 		}
 	}
-	return result{songNum: songNum, passed: match, writes: len(builtinWrites), builtinCycles: builtinCycles, newCycles: newCycles, origSize: len(rawData), newSize: len(convertedData), convStats: convStats, coverage: cpuNew.Coverage, dataCoverage: cpuNew.DataCoverage, dataBase: playerBase, dataSize: len(playerData)}
+	return result{songNum: songNum, passed: match, writes: len(builtinWrites), builtinCycles: builtinCycles, newCycles: newCycles, builtinMaxCycles: builtinMaxCycles, newMaxCycles: newMaxCycles, origSize: len(rawData), newSize: len(convertedData), convStats: convStats, coverage: cpuNew.Coverage, dataCoverage: cpuNew.DataCoverage, dataBase: playerBase, dataSize: len(playerData)}
 }
 
 // rebuildPlayer rebuilds player.bin from source after wavetable.inc is generated
@@ -3550,8 +3558,9 @@ func main() {
 			totalOrigSize += r.origSize
 			totalNewSize += r.newSize
 			cycleRatio := float64(r.newCycles) / float64(r.builtinCycles)
+			maxCycleRatio := float64(r.newMaxCycles) / float64(r.builtinMaxCycles)
 			sizeRatio := float64(r.newSize) / float64(r.origSize)
-			fmt.Printf("Song %d: cycles: %.2fx, size: %.2fx\n", r.songNum, cycleRatio, sizeRatio)
+			fmt.Printf("Song %d: cycles: %.2fx, max: %.2fx, size: %.2fx\n", r.songNum, cycleRatio, maxCycleRatio, sizeRatio)
 			if s.NewWaveSize > maxWave {
 				maxWave = s.NewWaveSize
 			}
@@ -3792,7 +3801,8 @@ func testEquivalenceSong(songNum int, convertedData []byte, dictSize int, player
 	snapshot := cpu.Snapshot()
 
 	// Get baseline
-	baseline := serializeWrites(cpu.RunFrames(playerBase+3, testFrames))
+	baselineWrites, _ := cpu.RunFrames(playerBase+3, testFrames)
+	baseline := serializeWrites(baselineWrites)
 
 	// Test equivalences for each extended entry
 	equiv := make(map[string]int)
@@ -3858,7 +3868,8 @@ func testEquivalenceSong(songNum int, convertedData []byte, dictSize int, player
 			cpu.Memory[extMemOff+1] = cpu.Memory[priMemOff+1]
 			cpu.Memory[extMemOff+2] = cpu.Memory[priMemOff+2]
 
-			testResult := serializeWrites(cpu.RunFrames(playerBase+3, testFrames))
+			testWrites, _ := cpu.RunFrames(playerBase+3, testFrames)
+			testResult := serializeWrites(testWrites)
 
 			if bytes.Equal(baseline, testResult) {
 				key := fmt.Sprintf("%d", extIdx)
