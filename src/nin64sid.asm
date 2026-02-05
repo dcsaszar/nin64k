@@ -118,7 +118,7 @@ irq_handler:
         rti
 
 ; ----------------------------------------------------------------------------
-; Checkpoint - called during decompression, just returns (IRQ handles playback)
+; Checkpoint - called by decompressor and player, just returns (IRQ handles playback)
 ; ----------------------------------------------------------------------------
 checkpoint:
         rts

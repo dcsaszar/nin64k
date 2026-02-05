@@ -8,3 +8,7 @@
 .segment "CODE"
 
 .include "../../src/odin_player.inc"
+
+; Checkpoint stub for standalone player (no-op)
+checkpoint:
+        rts

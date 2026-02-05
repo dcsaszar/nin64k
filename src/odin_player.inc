@@ -4,6 +4,10 @@
 ; Entry points:
 ;   +$00: Init - A=song number (ignored), X=buffer page high byte (e.g. $10, $70)
 ;   +$03: Play - call once per frame
+;
+; IMPORTANT: Define 'checkpoint' globally before including this file.
+; Called frequently. Can trash A and P.
+; Minimal: checkpoint: rts
 ; ============================================================================
 
 ; Entry point jump table
@@ -116,13 +120,18 @@ player_init:
         lda     #$00
         sta     filter_load+1
         sta     zp_song_base
+        jsr     checkpoint
         ; Clear player variables
-        tay
+        ldy     #0
 @clear:
+        lda     #$00
         sta     chn_hardrestart,y
         iny
         cpy     #PLAYERVARSSIZE
-        bne     @clear
+        beq     @clear_done
+        jsr     checkpoint
+        jmp     @clear
+@clear_done:
 
         ; Initialize playback state (always start at order 0)
         lda     #$80
@@ -142,6 +151,7 @@ player_init:
         sta     chn_inst_ptr_hi+2
         lda     #$0f
         sta     globalvolume
+        jsr     checkpoint
         ; Initialize decode buffer state (mark all as empty)
         lda     #$FF
         sta     chn_decoded_pat+0
@@ -150,6 +160,7 @@ player_init:
         sta     chn_decoded_row+0
         sta     chn_decoded_row+1
         sta     chn_decoded_row+2
+        jsr     checkpoint
         ; Set up split dictionary pointers (3 arrays of 410 bytes each)
         ; dict0 (notes) at ROW_DICT_OFF
         lda     zp_song_base
@@ -175,6 +186,7 @@ player_init:
         lda     zp_dict1+1
         adc     #>410
         sta     zp_dict2+1
+        jsr     checkpoint
         ; Set packed_ptrs_addr = song_base + PACKED_PTRS_OFF
         lda     zp_song_base
         clc
@@ -197,6 +209,7 @@ player_init:
 ; player_play - Play one frame
 ; ============================================================================
 player_play:
+        jsr     checkpoint
         dec     mod3counter
         bpl     @mod3ok
         lda     #$02
@@ -237,27 +250,35 @@ player_play:
         stx     prefetch_order
         sta     prefetch_row
         sta     decode_row
+        jsr     checkpoint
         ldy     #0
         jsr     get_transpose_order
         sta     prefetch_transpose+0
+        jsr     checkpoint
         ldy     #0
         jsr     get_trackptr_order
+        jsr     checkpoint
         ldx     prefetch_order
         ldy     #1
         jsr     get_transpose_order
         sta     prefetch_transpose+1
+        jsr     checkpoint
         ldy     #1
         jsr     get_trackptr_order
+        jsr     checkpoint
         ldx     prefetch_order
         ldy     #2
         jsr     get_transpose_order
         sta     prefetch_transpose+2
+        jsr     checkpoint
         ldy     #2
         jsr     get_trackptr_order
+        jsr     checkpoint
         lda     #$80
         sta     prefetch_done
         jmp     pp_allframes
 @pattern_update:
+        jsr     checkpoint
         lda     #$00
         sta     speedcounter
         lda     forcenewpattern
@@ -296,49 +317,61 @@ player_play:
         sta     chn_transpose+2
         jmp     @use_prefetch
 @no_prefetch_avail:
+        jsr     checkpoint
         lda     #0
         sta     prefetch_done
         ldx     ordernumber
         ldy     #0
         jsr     get_transpose_order
         sta     chn_transpose+0
+        jsr     checkpoint
         ldy     #0
         jsr     get_trackptr_order
+        jsr     checkpoint
         ldx     ordernumber
         ldy     #1
         jsr     get_transpose_order
         sta     chn_transpose+1
+        jsr     checkpoint
         ldy     #1
         jsr     get_trackptr_order
+        jsr     checkpoint
         ldx     ordernumber
         ldy     #2
         jsr     get_transpose_order
         sta     chn_transpose+2
+        jsr     checkpoint
         ldy     #2
         jsr     get_trackptr_order
+        jsr     checkpoint
 @use_prefetch:
+        jsr     checkpoint
         ldx     #0
         lda     decode_buffer_lo,x
         sta     zp_trackptr
         lda     decode_buffer_hi,x
         sta     zp_trackptr+1
         jsr     fetch_channel_row
+        jsr     checkpoint
         ldx     #1
         lda     decode_buffer_lo,x
         sta     zp_trackptr
         lda     decode_buffer_hi,x
         sta     zp_trackptr+1
         jsr     fetch_channel_row
+        jsr     checkpoint
         ldx     #2
         lda     decode_buffer_lo,x
         sta     zp_trackptr
         lda     decode_buffer_hi,x
         sta     zp_trackptr+1
         jsr     fetch_channel_row
+        jsr     checkpoint
 
 pp_allframes:
         ldx     #$00
 pp_chnloop:
+        jsr     checkpoint
         lda     #$00
         sta     chn_vibdepth,x
         lda     chn_inst,x
@@ -367,6 +400,7 @@ pi_waveend:
         lda     (zp_ptr),y
 pi_waveset:
         sta     chn_waveidx,x
+        jsr     checkpoint
         lda     chn_effect,x
         cmp     #$02
         beq     pi_skiparp
@@ -403,6 +437,7 @@ pi_arpset:
         sta     chn_notefreqhi,x
         sta     chn_freqhi,x
 pi_skiparp:
+        jsr     checkpoint
         lda     chn_vibdelay,x
         bne     pi_vibdelayed
         ldy     #INST_VIBDEPSP
@@ -454,6 +489,7 @@ pi_pulseup:
         lda     chn_plslimitup,x
         jmp     pi_pulsestore
 pi_noinst:
+        jsr     checkpoint
         lda     chn_effect,x
         bne     fx_haseffect
         ; Effect 0: special handling based on param
@@ -719,6 +755,7 @@ fx_haseffect:
         sta     forcenewpattern
         jmp     do_slide_vib
 do_slide_vib:
+        jsr     checkpoint
         lda     chn_slideenable,x
         beq     @noslide
         lda     chn_freqlo,x
@@ -780,7 +817,7 @@ pp_nextchn:
         beq     pp_chnloop_done
         jmp     pp_chnloop
 pp_chnloop_done:
-
+        jsr     checkpoint
         ldy     filter_idx
         beq     filtdone
 filter_load:
@@ -794,6 +831,7 @@ filter_load:
 filtok:
         sty     filter_idx
 filtdone:
+        jsr     checkpoint
 
         ldy     ordernumber
         lda     forcenewpattern
@@ -816,37 +854,47 @@ filtdone:
         adc     chn_hardrestart+0
         cmp     speed
         bcc     @hr1
+        jsr     checkpoint
         ldx     hrordernumber
         ldy     #0
         jsr     get_trackptr_order
+        jsr     checkpoint
         ldx     #0
         jsr     check_hardrestart
 @hr1:
+        jsr     checkpoint
         lda     speedcounter
         clc
         adc     chn_hardrestart+1
         cmp     speed
         bcc     @hr2
+        jsr     checkpoint
         ldx     hrordernumber
         ldy     #1
         jsr     get_trackptr_order
+        jsr     checkpoint
         ldx     #1
         jsr     check_hardrestart
 @hr2:
+        jsr     checkpoint
         lda     speedcounter
         clc
         adc     chn_hardrestart+2
         cmp     speed
         bcc     @dump
+        jsr     checkpoint
         ldx     hrordernumber
         ldy     #2
         jsr     get_trackptr_order
+        jsr     checkpoint
         ldx     #2
         jsr     check_hardrestart
 
 @dump:
+        jsr     checkpoint
         ldx     #$00
 @dumploop:
+        jsr     checkpoint
         ldy     sidregoffs,x
         lda     chn_plswidthlo,x
         sta     $d402,y
@@ -873,6 +921,7 @@ filtdone:
         lda     globalvolume
         ora     filter_mode
         sta     $d418
+        jsr     checkpoint
         rts
 
 ; ============================================================================
@@ -943,6 +992,7 @@ fetch_channel_row:
         adc     zp_song_base+1
         sta     zp_ptr+1
         sta     chn_inst_ptr_hi,x       ; Cache high byte
+        jsr     checkpoint
         ; Load all instrument params with inline (zp_ptr),y
         ldy     #INST_AD
         lda     (zp_ptr),y
@@ -959,6 +1009,7 @@ fetch_channel_row:
         ldy     #INST_VIBDELAY
         lda     (zp_ptr),y
         sta     chn_vibdelay,x
+        jsr     checkpoint
         ldy     #INST_PULSEWIDTH
         lda     (zp_ptr),y
         sta     zp_temp0
@@ -991,6 +1042,7 @@ fetch_channel_row:
         sta     chn_plsdir,x
         sta     chn_vibpos,x
 @checknote:
+        jsr     checkpoint
         ldy     #0
         lda     (zp_trackptr),y
         and     #$7f
@@ -1083,6 +1135,7 @@ gto_channel:
         beq     gto_advance_one     ; sequential, decode next row
 gto_need_decode:
         ; Different pattern or non-sequential - restart from row 0
+        jsr     checkpoint
         lda     (zp_ptr),y          ; re-read pattern index
         sta     chn_decoded_pat,x
         ; Reset decoder state
@@ -1100,11 +1153,14 @@ gto_skip_loop:
         cmp     decode_row
         beq     gto_store_to_buffer ; reached target, decode and store
         jsr     decode_advance_row  ; decode (skip) one row
+        jsr     checkpoint
         inc     chn_decoded_row,x
         jmp     gto_skip_loop
 gto_advance_one:
         ; Sequential advance - decode one more row
+        jsr     checkpoint
         jsr     decode_advance_row
+        jsr     checkpoint
 gto_store_to_buffer:
         ; Copy current row (prev_row) to decode buffer
         lda     decode_buffer_lo,x
@@ -1167,6 +1223,7 @@ dar_not_rle:
         lda     #0
         adc     zp_temp0+1
         sta     zp_temp0+1
+        jsr     checkpoint
         ; Read encoded byte
         ldy     #0
         lda     (zp_temp0),y

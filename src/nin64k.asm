@@ -39,10 +39,6 @@ basic_stub:
 ; ----------------------------------------------------------------------------
 start:
         sei
-        ; Disable CIA interrupts
-        lda     #$7F
-        sta     $DC0D
-        lda     $DC0D
 
         ; Bank out BASIC ROM, keep I/O visible
         lda     #$35
@@ -56,8 +52,6 @@ start:
         lda     #$00
         ldx     #>TUNE1_BASE
         jsr     player_init
-
-        cli
 
 ; ----------------------------------------------------------------------------
 ; Main loop - polling-based playback with preloading
@@ -112,38 +106,41 @@ main_loop:
         jmp     main_loop
 
 ; ----------------------------------------------------------------------------
-; Checkpoint - called during decompression for vblank detection and indicator
+; Checkpoint - called during decompression and player for vblank detection
+; Uses guard flag to prevent re-entry when called from within player_play
 ; ----------------------------------------------------------------------------
 checkpoint:
-        rol     $D020               ; Loading indicator
         lda     $D012
-        bmi     @no_vblank
-        cmp     zp_last_line
-        bpl     @no_vblank
+        sta     $D020
+        cmp     #$fd
+        bcc     @no_vblank
+@wait:
+        lda     $D012
+        bmi     @wait
         jsr     play_frame
-        lda     #0
 @no_vblank:
-        sta     zp_last_line
         rts
 
 ; ----------------------------------------------------------------------------
 ; Play one frame of music
 ; ----------------------------------------------------------------------------
 play_frame:
-        lda     #$07
-        sta     $D020
         txa
         pha
         tya
         pha
+        jsr     checkpoint
+        lda     #7
+        sta     $D020
         jsr     player_play
+        lda     #0
+        sta     $D020
+        jsr     checkpoint
         jsr     check_countdown
         pla
         tay
         pla
         tax
-        lda     #$00
-        sta     $D020
         rts
 
 ; ----------------------------------------------------------------------------
@@ -155,6 +152,7 @@ check_countdown:
         tax
         dex
         dex
+        jsr     checkpoint
         lda     #$FF
         clc
         adc     part_times,x
@@ -164,6 +162,7 @@ check_countdown:
         bne     @check_zero
         dec     part_times+1,x
 @check_zero:
+        jsr     checkpoint
         lda     part_times,x
         bne     @done
         lda     part_times+1,x
@@ -171,6 +170,7 @@ check_countdown:
         lda     zp_part_num
         cmp     #$09
         beq     @done
+        jsr     checkpoint
         ; Song ended - switch to preloaded song immediately
         inc     zp_part_num
         ; Init player for the preloaded buffer
@@ -180,14 +180,17 @@ check_countdown:
         ; Even part num (2,4,6,8) -> TUNE2_BASE
         lda     #$00
         ldx     #>TUNE2_BASE
+        jsr     checkpoint
         jsr     player_init
         jmp     @done
 @switch_odd:
         ; Odd part num (3,5,7,9) -> TUNE1_BASE
         lda     #$00
         ldx     #>TUNE1_BASE
+        jsr     checkpoint
         jsr     player_init
 @done:
+        jsr     checkpoint
         rts
 
 ; ----------------------------------------------------------------------------

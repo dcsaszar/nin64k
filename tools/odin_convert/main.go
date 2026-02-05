@@ -2304,10 +2304,16 @@ type CPU6502 struct {
 	DataCoverage  map[uint16]bool // Data read coverage
 	DataBase      uint16          // Start of data region to track
 	DataSize      int             // Size of data region
-	RedundantCLC  map[uint16]int  // Addresses with redundant CLC (C already 0)
-	RedundantSEC  map[uint16]int  // Addresses with redundant SEC (C already 1)
-	TotalCLC      map[uint16]int  // Total CLC executions per address
-	TotalSEC      map[uint16]int  // Total SEC executions per address
+	RedundantCLC   map[uint16]int    // Addresses with redundant CLC (C already 0)
+	RedundantSEC   map[uint16]int    // Addresses with redundant SEC (C already 1)
+	TotalCLC       map[uint16]int    // Total CLC executions per address
+	TotalSEC       map[uint16]int    // Total SEC executions per address
+	LastCheckpointCycle  uint64 // Cycle count at last checkpoint visit
+	LastCheckpointCaller uint16 // Address of JSR that called checkpoint last time
+	CheckpointAddr       uint16 // Address of checkpoint routine (0 = disabled)
+	CheckpointGap        uint64 // Max cycles between checkpoint calls
+	CheckpointGapFrom    uint16 // JSR address at start of longest gap
+	CheckpointGapTo      uint16 // JSR address at end of longest gap
 }
 
 // Status flags
@@ -2324,12 +2330,12 @@ const (
 
 func NewCPU() *CPU6502 {
 	cpu := &CPU6502{
-		SP:           0xFF,
-		P:            FlagU | FlagI,
-		RedundantCLC: make(map[uint16]int),
-		RedundantSEC: make(map[uint16]int),
-		TotalCLC:     make(map[uint16]int),
-		TotalSEC:     make(map[uint16]int),
+		SP:             0xFF,
+		P:              FlagU | FlagI,
+		RedundantCLC:   make(map[uint16]int),
+		RedundantSEC:   make(map[uint16]int),
+		TotalCLC: make(map[uint16]int),
+		TotalSEC: make(map[uint16]int),
 	}
 	return cpu
 }
@@ -2517,6 +2523,22 @@ func (c *CPU6502) addrIndirectY() (uint16, bool) {
 func (c *CPU6502) Step() bool {
 	if c.Coverage != nil {
 		c.Coverage[c.PC] = true
+	}
+	if c.CheckpointAddr != 0 && c.PC == c.CheckpointAddr {
+		// Get caller address from stack (return addr - 3 = JSR instruction)
+		retLo := c.Memory[0x100+uint16(c.SP)+1]
+		retHi := c.Memory[0x100+uint16(c.SP)+2]
+		caller := (uint16(retHi)<<8 | uint16(retLo)) - 2 // -2 because return addr is after JSR
+		if c.LastCheckpointCycle > 0 {
+			gap := c.Cycles - c.LastCheckpointCycle
+			if gap > c.CheckpointGap {
+				c.CheckpointGap = gap
+				c.CheckpointGapFrom = c.LastCheckpointCaller
+				c.CheckpointGapTo = caller
+			}
+		}
+		c.LastCheckpointCycle = c.Cycles
+		c.LastCheckpointCaller = caller
 	}
 	opcode := c.Read(c.PC)
 	c.PC++
@@ -3238,6 +3260,9 @@ type result struct {
 	redundantSEC      map[uint16]int
 	totalCLC          map[uint16]int
 	totalSEC          map[uint16]int
+	checkpointGap     uint64
+	checkpointGapFrom uint16
+	checkpointGapTo   uint16
 }
 
 func testSong(songNum int, rawData, convertedData []byte, convStats ConversionStats, playerData []byte) result {
@@ -3270,6 +3295,7 @@ func testSong(songNum int, rawData, convertedData []byte, convStats ConversionSt
 	cpuNew.DataCoverage = make(map[uint16]bool)
 	cpuNew.DataBase = playerBase
 	cpuNew.DataSize = len(playerData)
+	cpuNew.CheckpointAddr = playerBase + uint16(len(playerData)) - 1 // checkpoint stub at end
 	copy(cpuNew.Memory[bufferBase:], convertedData)
 	copy(cpuNew.Memory[playerBase:], playerData)
 	cpuNew.A = 0
@@ -3279,6 +3305,7 @@ func testSong(songNum int, rawData, convertedData []byte, convStats ConversionSt
 
 	cpuNew.SIDWrites = nil
 	cpuNew.Cycles = 0
+	cpuNew.LastCheckpointCycle = 0 // Reset to avoid underflow when cycles reset
 	newWrites, newMaxCycles := cpuNew.RunFrames(playerBase+3, testFrames, playerBase, 0, byte(bufferBase>>8))
 	newCycles := cpuNew.Cycles
 
@@ -3295,7 +3322,7 @@ func testSong(songNum int, rawData, convertedData []byte, convStats ConversionSt
 			}
 		}
 	}
-	return result{songNum: songNum, passed: match, writes: len(builtinWrites), builtinCycles: builtinCycles, newCycles: newCycles, builtinMaxCycles: builtinMaxCycles, newMaxCycles: newMaxCycles, origSize: len(rawData), newSize: len(convertedData), convStats: convStats, coverage: cpuNew.Coverage, dataCoverage: cpuNew.DataCoverage, dataBase: playerBase, dataSize: len(playerData), redundantCLC: cpuNew.RedundantCLC, redundantSEC: cpuNew.RedundantSEC, totalCLC: cpuNew.TotalCLC, totalSEC: cpuNew.TotalSEC}
+	return result{songNum: songNum, passed: match, writes: len(builtinWrites), builtinCycles: builtinCycles, newCycles: newCycles, builtinMaxCycles: builtinMaxCycles, newMaxCycles: newMaxCycles, origSize: len(rawData), newSize: len(convertedData), convStats: convStats, coverage: cpuNew.Coverage, dataCoverage: cpuNew.DataCoverage, dataBase: playerBase, dataSize: len(playerData), redundantCLC: cpuNew.RedundantCLC, redundantSEC: cpuNew.RedundantSEC, totalCLC: cpuNew.TotalCLC, totalSEC: cpuNew.TotalSEC, checkpointGap: cpuNew.CheckpointGap, checkpointGapFrom: cpuNew.CheckpointGapFrom, checkpointGapTo: cpuNew.CheckpointGapTo}
 }
 
 // rebuildPlayer rebuilds player.bin from source after wavetable.inc is generated
@@ -3967,6 +3994,20 @@ func main() {
 					fmt.Printf("  $%04X: SEC (C always 1) x%d\n", addr, count)
 				}
 			}
+		}
+
+		// Report checkpoint timing - worst case across all songs
+		var worstGapVal uint64
+		var worstGapFrom, worstGapTo uint16
+		for _, r := range allResults {
+			if r.checkpointGap > worstGapVal {
+				worstGapVal = r.checkpointGap
+				worstGapFrom = r.checkpointGapFrom
+				worstGapTo = r.checkpointGapTo
+			}
+		}
+		if worstGapVal > 0 {
+			fmt.Printf("\nSlowest checkpoint: %s cycles (from $%04X to $%04X)\n", commas(worstGapVal), worstGapFrom, worstGapTo)
 		}
 
 	} else {
