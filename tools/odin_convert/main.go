@@ -1854,8 +1854,13 @@ func remapPatternEffects(pattern []byte, remap [16]byte, fSubRemap map[int]byte)
 			newEffect = remap[0xE]
 			newParam = byte2
 
+		case 3:
+			// Porta: swap nibbles for faster player processing
+			newEffect = remap[3]
+			newParam = ((byte2 & 0x0F) << 4) | ((byte2 & 0xF0) >> 4)
+
 		default:
-			// Other effects (3=porta, A=arp, B=jump) - just remap effect number
+			// Other effects (A=arp, B=jump) - just remap effect number
 			newEffect = remap[oldEffect]
 			newParam = byte2
 		}

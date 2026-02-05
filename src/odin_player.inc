@@ -455,12 +455,12 @@ pi_pulseup:
         jmp     pi_pulsestore
 pi_noinst:
         lda     chn_effect,x
-        bne     @haseffect
+        bne     fx_haseffect
         ; Effect 0: special handling based on param
         ; param 0=nop, 1=vib, 2=break, 3=fineslide
         lda     chn_effectpar,x
         bne     @effect0_dispatch
-        jmp     @noeffect              ; param 0 = no effect
+        jmp     do_slide_vib
 @effect0_dispatch:
         cmp     #2
         bcs     @effect0_break_or_fineslide
@@ -468,13 +468,13 @@ pi_noinst:
         lda     #0
         sta     chn_vibdepth,x
         sta     chn_vibspeed,x
-        jmp     @noeffect
+        jmp     do_slide_vib
 @effect0_break_or_fineslide:
         beq     @effect0_break
         ; param 3 = fineslide
         lda     speedcounter
         beq     @do_fineslide
-        jmp     @noeffect
+        jmp     do_slide_vib
 @do_fineslide:
         lda     chn_slidedelta_lo,x
         clc
@@ -482,13 +482,13 @@ pi_noinst:
         sta     chn_slidedelta_lo,x
         lda     #$80
         sta     chn_slideenable,x
-        jmp     @noeffect
+        jmp     do_slide_vib
 @effect0_break:
         ; param 2 = break
         lda     #$80
         sta     forcenewpattern
-        jmp     @noeffect
-@haseffect:
+        jmp     do_slide_vib
+fx_haseffect:
         ; Binary search dispatch for effects 1-E (14 effects), all inlined
         cmp     #8
         bcc     @fx_1_to_7
@@ -507,7 +507,7 @@ pi_noinst:
         lda     chn_effectpar,x
         sta     chn_hardrestart,x
 @fx_exit2:
-        jmp     @noeffect
+        jmp     do_slide_vib
 @fx_5:
         ; Effect 5 = filter trigger (inlined)
         lda     speedcounter
@@ -532,19 +532,19 @@ pi_noinst:
         ldy     #INST_FILTLOOP
         lda     (zp_ptr),y
         sta     filter_loop
-        jmp     @noeffect
+        jmp     do_slide_vib
 @fx_6_7:
         cmp     #7
         bcs     @fx_7
         ; Effect 6 = set SR (inlined)
         lda     chn_effectpar,x
         sta     chn_sr,x
-        jmp     @noeffect
+        jmp     do_slide_vib
 @fx_7:
         ; Effect 7 = set waveform (inlined)
         lda     chn_effectpar,x
         sta     chn_waveform,x
-        jmp     @noeffect
+        jmp     do_slide_vib
 @fx_1_to_3:
         ; Effects 1-3 (most common: arp, porta, speed)
         cmp     #2
@@ -579,7 +579,7 @@ pi_noinst:
         lda     freqtable_hi,y
         sta     chn_notefreqhi,x
         sta     chn_freqhi,x
-        jmp     @noeffect
+        jmp     do_slide_vib
 @fx_2_3:
         beq     @fx_2
         ; Effect 3 = speed (inlined)
@@ -588,21 +588,15 @@ pi_noinst:
         lda     chn_effectpar,x
         sta     speed
 @fx_exit1:
-        jmp     @noeffect
+        jmp     do_slide_vib
 @fx_2:
-        ; Effect 2 = tone portamento (inlined)
-        lda     chn_effectpar,x
+        ; Effect 2 = tone portamento (nibbles pre-swapped in data)
+        lda     chn_effectpar,x ; A = $YX (swapped)
         tay
-        asl     a
-        asl     a
-        asl     a
-        asl     a
+        and     #$F0            ; low byte = $Y0
         sta     zp_ptr
         tya
-        lsr     a
-        lsr     a
-        lsr     a
-        lsr     a
+        and     #$0F            ; high byte = $0X
         sta     zp_ptr+1
         jsr     freqcmp
         bcc     @porta_up
@@ -629,7 +623,7 @@ pi_noinst:
         sta     chn_freqlo,x
         lda     chn_notefreqhi,x
         sta     chn_freqhi,x
-        jmp     @noeffect
+        jmp     do_slide_vib
 @fx_8_to_e:
         cmp     #$c
         bcs     @fx_c_to_e
@@ -655,19 +649,19 @@ pi_noinst:
         lsr     a
         lsr     a
         sta     chn_plswidthhi,x
-        jmp     @noeffect
+        jmp     do_slide_vib
 @fx_9:
         ; Effect 9 = set AD (inlined)
         lda     chn_effectpar,x
         sta     chn_ad,x
-        jmp     @noeffect
+        jmp     do_slide_vib
 @fx_a_b:
         cmp     #$b
         bcs     @fx_b
         ; Effect A = filter resonance (inlined)
         lda     chn_effectpar,x
         sta     filter_resonance
-        jmp     @noeffect
+        jmp     do_slide_vib
 @fx_b:
         ; Effect B = slide (inlined)
         lda     #$80
@@ -685,7 +679,7 @@ pi_noinst:
         lda     chn_slidedelta_hi,x
         sbc     zp_ptr+1
         sta     chn_slidedelta_hi,x
-        jmp     @noeffect
+        jmp     do_slide_vib
 @slide_up:
         lda     chn_slidedelta_lo,x
         clc
@@ -694,7 +688,7 @@ pi_noinst:
         lda     chn_slidedelta_hi,x
         adc     zp_ptr+1
         sta     chn_slidedelta_hi,x
-        jmp     @noeffect
+        jmp     do_slide_vib
 @fx_c_to_e:
         cmp     #$e
         bcs     @fx_e
@@ -706,7 +700,7 @@ pi_noinst:
         lda     chn_effectpar,x
         sta     globalvolume
 @fx_exit3:
-        jmp     @noeffect
+        jmp     do_slide_vib
 @fx_d:
         ; Effect D = filter mode (inlined)
         lda     speedcounter
@@ -717,14 +711,15 @@ pi_noinst:
         asl     a
         asl     a
         sta     filter_mode
-        jmp     @noeffect
+        jmp     do_slide_vib
 @fx_e:
         ; Effect E = position jump (inlined)
         lda     chn_effectpar,x
         sta     nextordernumber
         lda     #$80
         sta     forcenewpattern
-@noeffect:
+        jmp     do_slide_vib
+do_slide_vib:
         lda     chn_slideenable,x
         beq     @noslide
         lda     chn_freqlo,x
@@ -737,7 +732,6 @@ pi_noinst:
 @noslide:
         lda     chn_vibdepth,x
         beq     @novib
-        ; Inline calcvibrato
         lda     chn_vibpos,x
         and     #$1f
         cmp     #$10
