@@ -1829,36 +1829,24 @@ func remapPatternEffects(pattern []byte, remap [16]byte, fSubRemap map[int]byte)
 			}
 
 		case 7:
-			// AD: $08 -> 0, $09 -> 1, $48 -> 2, $0A -> 3
+			// AD: keep literal value
 			newEffect = remap[7]
-			adRemap := map[byte]byte{0x08: 0, 0x09: 1, 0x48: 2, 0x0A: 3}
-			if v, ok := adRemap[byte2]; ok {
-				newParam = v
-			}
+			newParam = byte2
 
 		case 8:
-			// SR: $F9 -> 0, $0D -> 1, $FF -> 2, $F8 -> 3, $0F -> 4, $0E -> 5
+			// SR: keep literal value
 			newEffect = remap[8]
-			srRemap := map[byte]byte{0xF9: 0, 0x0D: 1, 0xFF: 2, 0xF8: 3, 0x0F: 4, 0x0E: 5}
-			if v, ok := srRemap[byte2]; ok {
-				newParam = v
-			}
+			newParam = byte2
 
 		case 9:
-			// Wave: $FF -> 0, $80 -> 1, $43 -> 2, $81 -> 3
+			// Wave: keep literal value
 			newEffect = remap[9]
-			waveRemap := map[byte]byte{0xFF: 0, 0x80: 1, 0x43: 2, 0x81: 3}
-			if v, ok := waveRemap[byte2]; ok {
-				newParam = v
-			}
+			newParam = byte2
 
 		case 0xE:
-			// Reso: $F1 -> 0, $00 -> 1, $F4 -> 2, $F0 -> 3, $F2 -> 4, $52 -> 5, $F5 -> 6
+			// Reso: keep literal value
 			newEffect = remap[0xE]
-			resoRemap := map[byte]byte{0xF1: 0, 0x00: 1, 0xF4: 2, 0xF0: 3, 0xF2: 4, 0x52: 5, 0xF5: 6}
-			if v, ok := resoRemap[byte2]; ok {
-				newParam = v
-			}
+			newParam = byte2
 
 		default:
 			// Other effects (3=porta, A=arp, B=jump) - just remap effect number
@@ -1877,6 +1865,8 @@ func remapPatternEffects(pattern []byte, remap [16]byte, fSubRemap map[int]byte)
 
 
 // Global caches loaded once
+// NOTE: Delete tools/odin_convert/equiv_cache.json when changing the pattern format
+// (e.g., effect parameter encoding, row dictionary structure)
 var globalEquivCache []EquivResult
 var equivCacheLoaded bool
 

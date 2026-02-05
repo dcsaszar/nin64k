@@ -407,14 +407,12 @@ player_play:
         cmp     #7
         bcs     @fx_7
         ; Effect 6 = set SR (inlined)
-        ldy     chn_effectpar,x
-        lda     sr_remap,y
+        lda     chn_effectpar,x
         sta     chn_sr,x
         jmp     @noeffect
 @fx_7:
         ; Effect 7 = set waveform (inlined)
-        ldy     chn_effectpar,x
-        lda     wave_remap,y
+        lda     chn_effectpar,x
         sta     chn_waveform,x
         jmp     @noeffect
 @fx_1_to_3:
@@ -511,16 +509,14 @@ player_play:
         jmp     @noeffect
 @fx_9:
         ; Effect 9 = set AD (inlined)
-        ldy     chn_effectpar,x
-        lda     ad_remap,y
+        lda     chn_effectpar,x
         sta     chn_ad,x
         jmp     @noeffect
 @fx_a_b:
         cmp     #$b
         bcs     @fx_b
         ; Effect A = filter resonance (inlined)
-        ldy     chn_effectpar,x
-        lda     reso_remap,y
+        lda     chn_effectpar,x
         sta     filter_resonance
         jmp     @noeffect
 @fx_b:
@@ -1317,16 +1313,6 @@ vibrato_table:
         .byte   $00,$08,$10,$17,$1f,$26,$2c,$33,$39,$3e,$43,$47,$4a,$4d,$4e,$50  ; old depth 5 -> new 7
         .byte   $00,$0d,$19,$25,$31,$3c,$47,$51,$5b,$63,$6a,$71,$76,$7a,$7e,$7f  ; old depth 8 -> new 8
         .byte   $00,$18,$2f,$46,$5c,$71,$85,$98,$aa,$ba,$c8,$d4,$de,$e6,$eb,$ef  ; old depth 15 -> new 9
-
-; Effect parameter remap tables (frequency-sorted)
-ad_remap:                               ; 7(AD): $08(96), $09(53), $48(38), $0A(32)
-        .byte   $08, $09, $48, $0A
-sr_remap:                               ; 8(SR): $F9(128), $0D(123), $FF(118), $F8(48), $0F(16), $0E(13)
-        .byte   $F9, $0D, $FF, $F8, $0F, $0E
-wave_remap:                             ; 9(wave): $FF(175), $80(90), $43(64), $81(58)
-        .byte   $FF, $80, $43, $81
-reso_remap:                             ; E(reso): $F1(50), $00(34), $F4(12), $F0(8), $F2(2), $52(2), $F5(1)
-        .byte   $F1, $00, $F4, $F0, $F2, $52, $F5
 
 ; ============================================================================
 ; Player Variables
