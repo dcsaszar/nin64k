@@ -16,8 +16,8 @@ zp_ptr           = $12          ; 2 bytes: temp pointer / temp values
 zp_trackptr      = $14          ; 2 bytes: track pointer
 zp_dict0         = $16          ; 2 bytes: dict0 (note bytes)
 zp_packed_data   = $18          ; 2 bytes: packed data address
-zp_decode_src    = $1A          ; 2 bytes: decode source pointer (temp)
-zp_decode_dst    = $1C          ; 2 bytes: decode dest pointer (temp)
+zp_temp0         = $1A          ; 2 bytes: temp (decode src / instrument processing)
+zp_temp1         = $1C          ; 2 bytes: temp (decode dst)
 zp_dict1         = $1E          ; 2 bytes: dict1 (inst|effect bytes)
 zp_dict2         = $20          ; 2 bytes: dict2 (param bytes)
 
@@ -354,12 +354,11 @@ pi_hasinst:
         lda     global_wavetable,y
         sta     chn_waveform,x
         iny
-        tya
-        pha
+        sty     zp_temp0
         ldy     #INST_WAVEEND
         lda     (zp_ptr),y
         sta     pi_waveend+1
-        pla
+        lda     zp_temp0
 pi_waveend:
         cmp     #$00
         bcc     pi_waveset
@@ -380,15 +379,14 @@ arp_load_addr = *+1
         adc     chn_transpose,x
 pi_arpabs:
         and     #$7f
-        pha
+        sta     zp_temp0            ; save note value
         ldy     chn_arpidx,x
         iny
-        tya
-        pha
+        sty     zp_temp0+1          ; save new arpidx
         ldy     #INST_ARPEND
         lda     (zp_ptr),y
         sta     pi_arpend+1
-        pla
+        lda     zp_temp0+1
 pi_arpend:
         cmp     #$00
         bcc     pi_arpset
@@ -397,8 +395,7 @@ pi_arpend:
         lda     (zp_ptr),y
 pi_arpset:
         sta     chn_arpidx,x
-        pla
-        tay
+        ldy     zp_temp0            ; restore note value
         lda     freqtable_lo,y
         sta     chn_notefreqlo,x
         sta     chn_freqlo,x
@@ -1128,18 +1125,18 @@ gto_advance_one:
 gto_store_to_buffer:
         ; Copy current row (prev_row) to decode buffer
         lda     decode_buffer_lo,x
-        sta     zp_decode_dst
+        sta     zp_temp1
         lda     decode_buffer_hi,x
-        sta     zp_decode_dst+1
+        sta     zp_temp1+1
         ldy     #0
         lda     chn_prev_row_0,x
-        sta     (zp_decode_dst),y
+        sta     (zp_temp1),y
         iny
         lda     chn_prev_row_1,x
-        sta     (zp_decode_dst),y
+        sta     (zp_temp1),y
         iny
         lda     chn_prev_row_2,x
-        sta     (zp_decode_dst),y
+        sta     (zp_temp1),y
         ; Update decoded row
         lda     decode_row
         sta     chn_decoded_row,x
@@ -1174,22 +1171,22 @@ dar_not_rle:
         lda     (zp_ptr),y          ; ptr lo
         clc
         adc     zp_packed_data
-        sta     zp_decode_src
+        sta     zp_temp0
         iny
         lda     (zp_ptr),y          ; ptr hi
         adc     zp_packed_data+1
-        sta     zp_decode_src+1
+        sta     zp_temp0+1
         ; Add current source offset
         lda     chn_src_off,x
         clc
-        adc     zp_decode_src
-        sta     zp_decode_src
+        adc     zp_temp0
+        sta     zp_temp0
         lda     #0
-        adc     zp_decode_src+1
-        sta     zp_decode_src+1
+        adc     zp_temp0+1
+        sta     zp_temp0+1
         ; Read encoded byte
         ldy     #0
-        lda     (zp_decode_src),y
+        lda     (zp_temp0),y
         cmp     #$E0
         bcs     dar_check_rle
         ; 0x00-0xDF: primary dict index
@@ -1208,7 +1205,7 @@ dar_extended:
         ; 0xFF + byte: extended dict index = 224 + next byte
         inc     chn_src_off,x       ; skip 0xFF marker
         ldy     #1
-        lda     (zp_decode_src),y   ; get extended byte
+        lda     (zp_temp0),y   ; get extended byte
         clc
         adc     #224                ; index lo = 224 + byte
         sta     dar_dict_idx
