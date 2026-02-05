@@ -584,7 +584,7 @@ fx_haseffect:
 @fx_exit1:
         jmp     do_slide_vib
 @fx_2:
-        ; Effect 2 = tone portamento (nibbles pre-swapped in data)
+        ; Effect 2 = tone portamento (nibbles pre-swapped, freqcmp inlined)
         lda     chn_effectpar,x ; A = $YX (swapped)
         tay
         and     #$F0            ; low byte = $Y0
@@ -592,15 +592,27 @@ fx_haseffect:
         tya
         and     #$0F            ; high byte = $0X
         sta     zp_ptr+1
-        jsr     freqcmp
+        ; Inline freqcmp #1: determine direction
+        lda     chn_freqhi,x
+        cmp     chn_notefreqhi,x
+        bne     @porta_cmp1
+        lda     chn_freqlo,x
+        cmp     chn_notefreqlo,x
+@porta_cmp1:
         bcc     @porta_up
+        ; Porta down
         lda     chn_freqlo,x
         sbc     zp_ptr
         sta     chn_freqlo,x
         lda     chn_freqhi,x
         sbc     zp_ptr+1
         sta     chn_freqhi,x
-        jsr     freqcmp
+        ; Inline freqcmp #2: check overshoot (down) - A already has freqhi
+        cmp     chn_notefreqhi,x
+        bne     @porta_cmp2
+        lda     chn_freqlo,x
+        cmp     chn_notefreqlo,x
+@porta_cmp2:
         bcs     @fx_exit1
         bcc     @porta_snap
 @porta_up:
@@ -610,7 +622,12 @@ fx_haseffect:
         lda     chn_freqhi,x
         adc     zp_ptr+1
         sta     chn_freqhi,x
-        jsr     freqcmp
+        ; Inline freqcmp #3: check overshoot (up) - A already has freqhi
+        cmp     chn_notefreqhi,x
+        bne     @porta_cmp3
+        lda     chn_freqlo,x
+        cmp     chn_notefreqlo,x
+@porta_cmp3:
         bcc     @fx_exit1
 @porta_snap:
         lda     chn_notefreqlo,x
@@ -889,8 +906,7 @@ check_hardrestart:
 ; fetch_channel_row - Fetch row data for channel X
 ; ============================================================================
 fetch_channel_row:
-        ldy     #0
-        iny
+        ldy     #1
         lda     (zp_trackptr),y
         lsr     a
         lsr     a
@@ -946,13 +962,13 @@ fetch_channel_row:
         sta     chn_vibdelay,x
         ldy     #INST_PULSEWIDTH
         lda     (zp_ptr),y
-        pha
+        sta     zp_temp0
         asl     a
         asl     a
         asl     a
         asl     a
         sta     chn_plswidthlo,x
-        pla
+        lda     zp_temp0
         lsr     a
         lsr     a
         lsr     a
@@ -963,13 +979,13 @@ fetch_channel_row:
         sta     chn_plsspeed,x
         ldy     #INST_PULSELIMITS
         lda     (zp_ptr),y
-        pha
+        sta     zp_temp0
         lsr     a
         lsr     a
         lsr     a
         lsr     a
         sta     chn_plslimitdown,x
-        pla
+        lda     zp_temp0
         and     #$0f
         sta     chn_plslimitup,x
         lda     #$00
@@ -1018,15 +1034,6 @@ fetch_channel_row:
         lda     #$fe
 @setgate:
         sta     chn_gateon,x
-@done:
-        rts
-
-freqcmp:
-        lda     chn_freqhi,x
-        cmp     chn_notefreqhi,x
-        bne     @done
-        lda     chn_freqlo,x
-        cmp     chn_notefreqlo,x
 @done:
         rts
 
