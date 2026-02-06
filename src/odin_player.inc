@@ -475,7 +475,6 @@ pi_hasinst:
         ldy     #INST_WAVEEND
         cmp     (zp_ptr),y
         bcc     pi_waveset
-        beq     pi_waveset
         iny                             ; INST_WAVELOOP
         lda     (zp_ptr),y
 pi_waveset:
@@ -500,7 +499,6 @@ pi_arpabs:
         ldy     #INST_ARPEND
         cmp     (zp_ptr),y
         bcc     pi_arpset
-        beq     pi_arpset
         iny                             ; INST_ARPLOOP
         lda     (zp_ptr),y
 pi_arpset:
@@ -898,7 +896,6 @@ filter_load:
         iny
         cpy     filter_end
         bcc     filtok
-        beq     filtok
         ldy     filter_loop
 filtok:
         sty     filter_idx

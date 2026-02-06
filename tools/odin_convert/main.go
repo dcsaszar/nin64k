@@ -1721,6 +1721,11 @@ func convertToNewFormat(raw []byte, songNum int, prevTables *PrevSongTables, eff
 						val = 255
 					}
 				}
+				// Store end+1 for wave/arp/filter end indices (params 3, 6, 14)
+				// Allows player to use single BCC instead of BCC+BEQ for <= check
+				if (param == 3 || param == 6 || param == 14) && val < 255 {
+					val++
+				}
 				out[dstIdx] = val
 			}
 		}
