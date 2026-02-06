@@ -1700,6 +1700,11 @@ func convertToNewFormat(raw []byte, songNum int, prevTables *PrevSongTables, eff
 					newDepth := vibDepthRemap[oldDepth]
 					val = (newDepth << 4) | speed
 				}
+				// Swap nibbles for pulse width (param 10 = INST_PULSEWIDTH)
+				// Allows player to use AND instead of 4x ASL/LSR
+				if param == 10 {
+					val = (val << 4) | (val >> 4)
+				}
 				// Remap filter indices (params 13,14,15)
 				if param >= 13 && param <= 15 && val < 255 {
 					if len(filterFullRanges[inst].content) > 0 {

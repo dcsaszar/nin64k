@@ -388,16 +388,10 @@ player_play:
         jsr     checkpoint
         ldy     #INST_PULSEWIDTH
         lda     (zp_ptr),y
-        asl     a
-        asl     a
-        asl     a
-        asl     a
+        and     #$f0
         sta     chn_plswidthlo,x
         lda     (zp_ptr),y
-        lsr     a
-        lsr     a
-        lsr     a
-        lsr     a
+        and     #$0f
         sta     chn_plswidthhi,x
         iny
         lda     (zp_ptr),y
