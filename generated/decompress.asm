@@ -12,14 +12,13 @@
 ; Minimal: checkpoint: rts
 
 ; Buffer layout (dual-buffer decompression)
-;   Buffer 1 (odd songs):  $2000  (max $1D00 bytes)
-;   Buffer 2 (even songs): $3E00  (max $1D00 bytes)
-;   Buffer DISTANCE (not length): $1E00 - offset to reach other buffer
+;   Buffer 1 (odd songs):  $2000-$3CFF  ($1D00 bytes)
+;   Buffer 2 (even songs): $3D00-$59FF  ($1D00 bytes)
 ; To change: update constants in cmd/compress/decompress6502.go, then rebuild
 DECOMP_BUF1_HI   = $20           ; Buffer 1 high byte
-DECOMP_BUF2_HI   = $3E           ; Buffer 2 high byte
-DECOMP_BUF_DIST  = $1E           ; Distance between buffer starts (NOT max length)
-DECOMP_WRAP_HI   = $5C           ; Wrap threshold (buf2 + distance)
+DECOMP_BUF2_HI   = $3D           ; Buffer 2 high byte
+DECOMP_BUF_SIZE  = $1D           ; Buffer size ($1D00 >> 8)
+DECOMP_WRAP_HI   = $5A           ; Wrap threshold (buf2 + size)
 
 ; Internal zero page variables
 zp_val_lo       = $07
@@ -32,10 +31,10 @@ zp_caller_x     = $0C
 .proc decompress
         ldy     #$00
         lda     zp_out_hi
-        cmp     #$3E
-        lda     #$E2
+        cmp     #DECOMP_BUF2_HI
+        lda     #<(-DECOMP_BUF_SIZE)
         bcc     store_delta
-        lda     #$1E
+        lda     #DECOMP_BUF_SIZE
 store_delta:
         sta     zp_other_delta
 main_loop:
@@ -72,9 +71,9 @@ fwdref:
         bcc     store_and_check
         sbc     zp_other_delta
 store_and_check:
-        cmp     #$5C
+        cmp     #DECOMP_WRAP_HI
         bcc     no_high_wrap
-        sbc     #$3C
+        sbc     #DECOMP_WRAP_HI-DECOMP_BUF1_HI
 no_high_wrap:
         bne     backref_no_adjust
 set_x3:
@@ -105,10 +104,10 @@ backref_common:
         lda     zp_out_hi
         sbc     zp_val_hi
         bcc     backref_adjust
-        cmp     #$20
+        cmp     #DECOMP_BUF1_HI
         bcs     backref_no_adjust
 backref_adjust:
-        adc     #$3C
+        adc     #DECOMP_WRAP_HI-DECOMP_BUF1_HI
 backref_no_adjust:
         sta     zp_ref_hi
         jsr     read_gamma

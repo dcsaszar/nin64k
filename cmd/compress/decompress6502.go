@@ -28,16 +28,10 @@ const (
 // Buffer layout constants for dual-buffer decompression
 //
 // Memory layout:
-//   Buffer 1 (odd songs):  $2000-$3CFF  ($1D00 bytes max)
-//   Dead zone:             $3D00-$3DFF  ($0100 bytes unused)
-//   Buffer 2 (even songs): $3E00-$5AFF  ($1D00 bytes max)
+//   Buffer 1 (odd songs):  $2000-$3CFF  ($1D00 bytes)
+//   Buffer 2 (even songs): $3D00-$59FF  ($1D00 bytes)
 //
-// Two distinct concepts:
-//   - Buffer LENGTH: max song data size ($1D00 = 7424 bytes)
-//   - Buffer DISTANCE: offset between buffer starts ($1E00 = 7680 bytes)
-//
-// The decompressor uses DISTANCE for address calculations (reaching the other buffer).
-// The compressor uses DISTANCE for virtual address space mapping.
+// Buffer length = buffer distance = $1D00 (7424 bytes)
 //
 // To change buffer addresses:
 //   1. Update these constants
@@ -46,11 +40,10 @@ const (
 //   4. Run: go run ./cmd/compress && make clean && make
 const (
 	DecompBuf1Hi   = 0x20                         // Buffer 1 high byte ($2000)
-	DecompBuf2Hi   = 0x3E                         // Buffer 2 high byte ($3E00)
-	DecompBufLen   = 0x1D                         // Max song length ($1D00 >> 8 = 7424 bytes)
-	DecompBufDist  = DecompBuf2Hi - DecompBuf1Hi  // Distance between buffer starts ($1E00 >> 8)
-	DecompWrapHi   = DecompBuf2Hi + DecompBufDist // Wrap threshold ($5C00)
-	DecompWrapAdj  = DecompWrapHi - DecompBuf1Hi  // Wrap adjustment ($3C)
+	DecompBuf2Hi   = 0x3D                         // Buffer 2 high byte ($3D00)
+	DecompBufSize  = DecompBuf2Hi - DecompBuf1Hi  // Buffer size ($1D00 >> 8 = 7424 bytes)
+	DecompWrapHi   = DecompBuf2Hi + DecompBufSize // Wrap threshold ($5A00)
+	DecompWrapAdj  = DecompWrapHi - DecompBuf1Hi  // Wrap adjustment ($3A)
 )
 
 // Terminator detection: must be > max gamma zeros in compressed data
@@ -86,7 +79,7 @@ func GetDecompressorAsm() string {
 // GetDecompressorAsmWithCycleStats returns the decompressor as ca65 assembly source code
 // with a comment on the instruction with lowest max cycle gap between revisits
 func GetDecompressorAsmWithCycleStats(lowestMaxGapOffset int, maxCycleGap uint64) string {
-	code, labelMap := GetDecompressorCodeWithLabels()
+	code, labelMap, annotations := GetDecompressorCodeWithLabels()
 	base := uint16(0x0D00)
 
 	// Create reverse map: address -> label name
@@ -111,6 +104,14 @@ func GetDecompressorAsmWithCycleStats(lowestMaxGapOffset int, maxCycleGap uint64
 			return name
 		}
 		return fmt.Sprintf("L%04X", addr)
+	}
+
+	// Helper to format immediate operand (symbolic if annotated, else hex)
+	immOperand := func(offset int) string {
+		if expr, ok := annotations[offset]; ok {
+			return "#" + expr
+		}
+		return fmt.Sprintf("#$%02X", code[offset])
 	}
 
 	var sb strings.Builder
@@ -268,23 +269,23 @@ func GetDecompressorAsmWithCycleStats(lowestMaxGapOffset int, maxCycleGap uint64
 
 		// Immediate
 		case 0x09:
-			sb.WriteString(fmt.Sprintf("ora     #$%02X", code[i+1]))
+			sb.WriteString(fmt.Sprintf("ora     %s", immOperand(i+1)))
 		case 0x49:
-			sb.WriteString(fmt.Sprintf("eor     #$%02X", code[i+1]))
+			sb.WriteString(fmt.Sprintf("eor     %s", immOperand(i+1)))
 		case 0x69:
-			sb.WriteString(fmt.Sprintf("adc     #$%02X", code[i+1]))
+			sb.WriteString(fmt.Sprintf("adc     %s", immOperand(i+1)))
 		case 0xA0:
-			sb.WriteString(fmt.Sprintf("ldy     #$%02X", code[i+1]))
+			sb.WriteString(fmt.Sprintf("ldy     %s", immOperand(i+1)))
 		case 0xA2:
-			sb.WriteString(fmt.Sprintf("ldx     #$%02X", code[i+1]))
+			sb.WriteString(fmt.Sprintf("ldx     %s", immOperand(i+1)))
 		case 0xA9:
-			sb.WriteString(fmt.Sprintf("lda     #$%02X", code[i+1]))
+			sb.WriteString(fmt.Sprintf("lda     %s", immOperand(i+1)))
 		case 0xC9:
-			sb.WriteString(fmt.Sprintf("cmp     #$%02X", code[i+1]))
+			sb.WriteString(fmt.Sprintf("cmp     %s", immOperand(i+1)))
 		case 0xE0:
-			sb.WriteString(fmt.Sprintf("cpx     #$%02X", code[i+1]))
+			sb.WriteString(fmt.Sprintf("cpx     %s", immOperand(i+1)))
 		case 0xE9:
-			sb.WriteString(fmt.Sprintf("sbc     #$%02X", code[i+1]))
+			sb.WriteString(fmt.Sprintf("sbc     %s", immOperand(i+1)))
 
 		// Indirect Y
 		case 0xB1:
@@ -402,14 +403,13 @@ func WriteDecompressorAsmWithCycleStats(path string, lowestMaxGapOffset int, max
 ; Minimal: checkpoint: rts
 
 ; Buffer layout (dual-buffer decompression)
-;   Buffer 1 (odd songs):  $%02X00  (max $1D00 bytes)
-;   Buffer 2 (even songs): $%02X00  (max $1D00 bytes)
-;   Buffer DISTANCE (not length): $1E00 - offset to reach other buffer
+;   Buffer 1 (odd songs):  $%04X-$%04X  ($1D00 bytes)
+;   Buffer 2 (even songs): $%04X-$%04X  ($1D00 bytes)
 ; To change: update constants in cmd/compress/decompress6502.go, then rebuild
 DECOMP_BUF1_HI   = $%02X           ; Buffer 1 high byte
 DECOMP_BUF2_HI   = $%02X           ; Buffer 2 high byte
-DECOMP_BUF_DIST  = $%02X           ; Distance between buffer starts (NOT max length)
-DECOMP_WRAP_HI   = $%02X           ; Wrap threshold (buf2 + distance)
+DECOMP_BUF_SIZE  = $%02X           ; Buffer size ($1D00 >> 8)
+DECOMP_WRAP_HI   = $%02X           ; Wrap threshold (buf2 + size)
 
 ; Internal zero page variables
 zp_val_lo       = $07
@@ -419,7 +419,7 @@ zp_ref_hi       = $0A
 zp_other_delta  = $0B
 zp_caller_x     = $0C
 
-`, DecompBuf1Hi, DecompBuf2Hi, DecompBuf1Hi, DecompBuf2Hi, DecompBufDist, DecompWrapHi)
+`, DecompBuf1Hi<<8, (DecompBuf1Hi+DecompBufSize)<<8-1, DecompBuf2Hi<<8, (DecompBuf2Hi+DecompBufSize)<<8-1, DecompBuf1Hi, DecompBuf2Hi, DecompBufSize, DecompWrapHi)
 	// Size excludes checkpoint RTS (1 byte) which is defined externally
 	content := fmt.Sprintf("; Generated file - do not edit. Modify cmd/compress/decompress6502.go instead.\n; Size: %d bytes\n%s%s", GetDecompressorCodeSize()-1, zpDefs, GetDecompressorAsmIncludeWithCycleStats(lowestMaxGapOffset, maxCycleGap))
 	return os.WriteFile(path, []byte(content), 0644)
@@ -445,18 +445,27 @@ func GetDecompressorAsmIncludeWithCycleStats(lowestMaxGapOffset int, maxCycleGap
 // This is the single source of truth - assembly is generated from this.
 // Entry point is at offset 0
 func GetDecompressorCode() []byte {
-	code, _ := GetDecompressorCodeWithLabels()
+	code, _, _ := GetDecompressorCodeWithLabels()
 	return code
 }
 
-// GetDecompressorCodeWithLabels returns the code and a map of label names to offsets
-func GetDecompressorCodeWithLabels() ([]byte, map[string]int) {
+// GetDecompressorCodeWithLabels returns the code, label map, and immediate operand annotations
+func GetDecompressorCodeWithLabels() ([]byte, map[string]int, map[int]string) {
 	code := make([]byte, 0, 350)
 	labels := make(map[string]int)
+	annotations := make(map[int]string) // offset -> symbolic expression for immediate operand
 
 	emit := func(bytes ...byte) int {
 		start := len(code)
 		code = append(code, bytes...)
+		return start
+	}
+
+	// emitImm emits an immediate instruction with a symbolic annotation
+	emitImm := func(opcode byte, value byte, expr string) int {
+		start := len(code)
+		code = append(code, opcode, value)
+		annotations[start+1] = expr // annotate the operand byte
 		return start
 	}
 
@@ -498,10 +507,10 @@ func GetDecompressorCodeWithLabels() ([]byte, map[string]int) {
 	// zpOtherDelta used with SBC (C=1): -gap gives +gap, +gap gives -gap
 	emit(0xA0, 0x00)             // LDY #0 (Y stays 0 throughout)
 	emit(0xA5, zpOutHi)          // LDA zpOutHi
-	emit(0xC9, DecompBuf2Hi)     // CMP #DecompBuf2Hi ($70)
-	emit(0xA9, 0x100-DecompBufDist) // LDA #$B0 (buffer 1 delta: -$50 = $B0)
-	emit(0x90, 0x02)             // BCC +2 (if < buf2, keep $B0)
-	emit(0xA9, DecompBufDist)     // LDA #$50 (buffer 2 delta: +$50)
+	emitImm(0xC9, DecompBuf2Hi, "DECOMP_BUF2_HI")
+	emitImm(0xA9, 0x100-DecompBufSize, "<(-DECOMP_BUF_SIZE)")
+	emit(0x90, 0x02)             // BCC +2 (if < buf2, keep negative delta)
+	emitImm(0xA9, DecompBufSize, "DECOMP_BUF_SIZE")
 	label("store_delta")
 	emit(0x85, zpOtherDelta) // STA zpOtherDelta
 
@@ -580,10 +589,10 @@ func GetDecompressorCodeWithLabels() ([]byte, map[string]int) {
 
 	storeAndCheckPos := label("store_and_check")
 	patchRel(bccStoreAndCheck, storeAndCheckPos)
-	emit(0xC9, DecompWrapHi) // CMP #DecompWrapHi ($C0)
+	emitImm(0xC9, DecompWrapHi, "DECOMP_WRAP_HI")
 	bccNoHighWrap := pos()
 	emit(0x90, 0x00) // BCC @no_high_wrap
-	emit(0xE9, DecompWrapAdj) // SBC #DecompWrapAdj ($A0)
+	emitImm(0xE9, DecompWrapAdj, "DECOMP_WRAP_HI-DECOMP_BUF1_HI")
 	noHighWrapPos := label("no_high_wrap")
 	patchRel(bccNoHighWrap, noHighWrapPos)
 	bneFwdrefToCopy := pos()
@@ -632,12 +641,12 @@ func GetDecompressorCodeWithLabels() ([]byte, map[string]int) {
 	emit(0xE5, zpValHi) // SBC zpValHi
 	bccNeedAdjust := pos()
 	emit(0x90, 0x00) // BCC need_adjust (borrow means dist > dst)
-	emit(0xC9, DecompBuf1Hi) // CMP #DecompBuf1Hi ($20)
+	emitImm(0xC9, DecompBuf1Hi, "DECOMP_BUF1_HI")
 	bcsNoAdjust := pos()
 	emit(0xB0, 0x00) // BCS no_adjust (address >= buf1 is valid)
 	needAdjustPos := label("backref_adjust")
 	patchRel(bccNeedAdjust, needAdjustPos)
-	emit(0x69, DecompWrapAdj) // ADC #DecompWrapAdj ($A0, wrap by span)
+	emitImm(0x69, DecompWrapAdj, "DECOMP_WRAP_HI-DECOMP_BUF1_HI")
 	backrefNoAdjustPos := label("backref_no_adjust")
 	patchRel(bcsNoAdjust, backrefNoAdjustPos)
 	patchRel(bneFwdrefToCopy, backrefNoAdjustPos)
@@ -823,5 +832,5 @@ func GetDecompressorCodeWithLabels() ([]byte, map[string]int) {
 	patch16(jsrCheckpointBit, base+uint16(checkpointPos))
 	emit(0x60) // RTS
 
-	return code, labels
+	return code, labels, annotations
 }

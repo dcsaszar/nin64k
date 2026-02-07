@@ -11,8 +11,8 @@ import (
 // and detects invalid memory accesses during decompression.
 type MemoryValidator struct {
 	// Buffer state tracking
-	buf1000Valid [bufferDist]bool // Which bytes in $1000-$6FFF are valid
-	buf7000Valid [bufferDist]bool // Which bytes in $7000-$CFFF are valid
+	buf1000Valid [bufferSize]bool // Which bytes in $1000-$6FFF are valid
+	buf7000Valid [bufferSize]bool // Which bytes in $7000-$CFFF are valid
 
 	// Current decompression state
 	currentSong   int
@@ -60,7 +60,7 @@ func (v *MemoryValidator) InitForSong(song int, songs map[int][]byte) {
 
 	// Song 2: self=$7000 (empty), other=$1000 (S1)
 	if song == 2 {
-		for i := 0; i < len(songs[1]) && i < bufferDist; i++ {
+		for i := 0; i < len(songs[1]) && i < bufferSize; i++ {
 			v.buf1000Valid[i] = true
 		}
 		// Protect scratch in other buffer (S1 was played, scratch corrupted)
@@ -86,12 +86,12 @@ func (v *MemoryValidator) InitForSong(song int, songs map[int][]byte) {
 	}
 
 	// Set validity for $1000 buffer up to high water mark
-	for i := 0; i < hwm1000 && i < bufferDist; i++ {
+	for i := 0; i < hwm1000 && i < bufferSize; i++ {
 		v.buf1000Valid[i] = true
 	}
 
 	// Set validity for $7000 buffer up to high water mark
-	for i := 0; i < hwm7000 && i < bufferDist; i++ {
+	for i := 0; i < hwm7000 && i < bufferSize; i++ {
 		v.buf7000Valid[i] = true
 	}
 
@@ -117,13 +117,13 @@ func (v *MemoryValidator) protectScratch(valid []bool) {
 
 // MarkWritten marks a byte as written to output
 func (v *MemoryValidator) MarkWritten(addr uint16) {
-	if addr >= 0x1000 && addr < 0x1000+bufferDist {
+	if addr >= 0x1000 && addr < 0x1000+bufferSize {
 		v.buf1000Valid[addr-0x1000] = true
-	} else if addr >= 0x7000 && addr < 0x7000+bufferDist {
+	} else if addr >= 0x7000 && addr < 0x7000+bufferSize {
 		v.buf7000Valid[addr-0x7000] = true
 	}
 	// Track output position
-	if addr >= v.selfBuffer && addr < v.selfBuffer+bufferDist {
+	if addr >= v.selfBuffer && addr < v.selfBuffer+bufferSize {
 		offset := addr - v.selfBuffer
 		if offset >= v.outputPos {
 			v.outputPos = offset + 1
@@ -141,7 +141,7 @@ func (v *MemoryValidator) ValidateRead(addr uint16) bool {
 	var valid bool
 	var reason string
 
-	if addr >= 0x1000 && addr < 0x1000+bufferDist {
+	if addr >= 0x1000 && addr < 0x1000+bufferSize {
 		offset := int(addr - 0x1000)
 		if v.selfBuffer == 0x1000 {
 			// Reading from self buffer ($1000)
@@ -157,7 +157,7 @@ func (v *MemoryValidator) ValidateRead(addr uint16) bool {
 				reason = fmt.Sprintf("other buffer ($1000) offset $%04X invalid/scratch", offset)
 			}
 		}
-	} else if addr >= 0x7000 && addr < 0x7000+bufferDist {
+	} else if addr >= 0x7000 && addr < 0x7000+bufferSize {
 		offset := int(addr - 0x7000)
 		if v.selfBuffer == 0x7000 {
 			// Reading from self buffer ($7000)
