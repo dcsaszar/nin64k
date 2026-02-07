@@ -11,14 +11,15 @@
 ; Called frequently (every bit, every byte). Can trash A and P.
 ; Minimal: checkpoint: rts
 
-; Buffer layout constants (dual-buffer decompression)
-; Buffer 1 (odd songs):  $2000
-; Buffer 2 (even songs): $3E00
+; Buffer layout (dual-buffer decompression)
+;   Buffer 1 (odd songs):  $2000  (max $1D00 bytes)
+;   Buffer 2 (even songs): $3E00  (max $1D00 bytes)
+;   Buffer DISTANCE (not length): $1E00 - offset to reach other buffer
 ; To change: update constants in cmd/compress/decompress6502.go, then rebuild
 DECOMP_BUF1_HI   = $20           ; Buffer 1 high byte
 DECOMP_BUF2_HI   = $3E           ; Buffer 2 high byte
-DECOMP_BUF_GAP   = $1E           ; Gap between buffers ($2000 >> 8)
-DECOMP_WRAP_HI   = $5C           ; Buffer 2 + gap (wrap threshold)
+DECOMP_BUF_DIST  = $1E           ; Distance between buffer starts (NOT max length)
+DECOMP_WRAP_HI   = $5C           ; Wrap threshold (buf2 + distance)
 
 ; Internal zero page variables
 zp_val_lo       = $07

@@ -26,9 +26,18 @@ const (
 )
 
 // Buffer layout constants for dual-buffer decompression
-// Buffer 1 (odd songs): $2000-$3FFF
-// Buffer 2 (even songs): $4000-$5FFF
-// Gap between buffers: $2000
+//
+// Memory layout:
+//   Buffer 1 (odd songs):  $2000-$3CFF  ($1D00 bytes max)
+//   Dead zone:             $3D00-$3DFF  ($0100 bytes unused)
+//   Buffer 2 (even songs): $3E00-$5AFF  ($1D00 bytes max)
+//
+// Two distinct concepts:
+//   - Buffer LENGTH: max song data size ($1D00 = 7424 bytes)
+//   - Buffer DISTANCE: offset between buffer starts ($1E00 = 7680 bytes)
+//
+// The decompressor uses DISTANCE for address calculations (reaching the other buffer).
+// The compressor uses DISTANCE for virtual address space mapping.
 //
 // To change buffer addresses:
 //   1. Update these constants
@@ -36,11 +45,12 @@ const (
 //   3. Update PART1 segment start in: c64.cfg, sid.cfg
 //   4. Run: go run ./cmd/compress && make clean && make
 const (
-	DecompBuf1Hi  = 0x20 // Buffer 1 high byte ($2000)
-	DecompBuf2Hi  = 0x3E // Buffer 2 high byte ($3E00)
-	DecompBufGap  = 0x1E // Gap between buffers ($1E00 >> 8)
-	DecompWrapHi  = 0x5C // Buffer 2 + gap ($3E00 + $1E00 = $5C00)
-	DecompWrapAdj = DecompWrapHi - DecompBuf1Hi // $40 = wrap adjustment
+	DecompBuf1Hi   = 0x20                         // Buffer 1 high byte ($2000)
+	DecompBuf2Hi   = 0x3E                         // Buffer 2 high byte ($3E00)
+	DecompBufLen   = 0x1D                         // Max song length ($1D00 >> 8 = 7424 bytes)
+	DecompBufDist  = DecompBuf2Hi - DecompBuf1Hi  // Distance between buffer starts ($1E00 >> 8)
+	DecompWrapHi   = DecompBuf2Hi + DecompBufDist // Wrap threshold ($5C00)
+	DecompWrapAdj  = DecompWrapHi - DecompBuf1Hi  // Wrap adjustment ($3C)
 )
 
 // Terminator detection: must be > max gamma zeros in compressed data
@@ -391,14 +401,15 @@ func WriteDecompressorAsmWithCycleStats(path string, lowestMaxGapOffset int, max
 ; Called frequently (every bit, every byte). Can trash A and P.
 ; Minimal: checkpoint: rts
 
-; Buffer layout constants (dual-buffer decompression)
-; Buffer 1 (odd songs):  $%02X00
-; Buffer 2 (even songs): $%02X00
+; Buffer layout (dual-buffer decompression)
+;   Buffer 1 (odd songs):  $%02X00  (max $1D00 bytes)
+;   Buffer 2 (even songs): $%02X00  (max $1D00 bytes)
+;   Buffer DISTANCE (not length): $1E00 - offset to reach other buffer
 ; To change: update constants in cmd/compress/decompress6502.go, then rebuild
 DECOMP_BUF1_HI   = $%02X           ; Buffer 1 high byte
 DECOMP_BUF2_HI   = $%02X           ; Buffer 2 high byte
-DECOMP_BUF_GAP   = $%02X           ; Gap between buffers ($2000 >> 8)
-DECOMP_WRAP_HI   = $%02X           ; Buffer 2 + gap (wrap threshold)
+DECOMP_BUF_DIST  = $%02X           ; Distance between buffer starts (NOT max length)
+DECOMP_WRAP_HI   = $%02X           ; Wrap threshold (buf2 + distance)
 
 ; Internal zero page variables
 zp_val_lo       = $07
@@ -408,7 +419,7 @@ zp_ref_hi       = $0A
 zp_other_delta  = $0B
 zp_caller_x     = $0C
 
-`, DecompBuf1Hi, DecompBuf2Hi, DecompBuf1Hi, DecompBuf2Hi, DecompBufGap, DecompWrapHi)
+`, DecompBuf1Hi, DecompBuf2Hi, DecompBuf1Hi, DecompBuf2Hi, DecompBufDist, DecompWrapHi)
 	// Size excludes checkpoint RTS (1 byte) which is defined externally
 	content := fmt.Sprintf("; Generated file - do not edit. Modify cmd/compress/decompress6502.go instead.\n; Size: %d bytes\n%s%s", GetDecompressorCodeSize()-1, zpDefs, GetDecompressorAsmIncludeWithCycleStats(lowestMaxGapOffset, maxCycleGap))
 	return os.WriteFile(path, []byte(content), 0644)
@@ -488,9 +499,9 @@ func GetDecompressorCodeWithLabels() ([]byte, map[string]int) {
 	emit(0xA0, 0x00)             // LDY #0 (Y stays 0 throughout)
 	emit(0xA5, zpOutHi)          // LDA zpOutHi
 	emit(0xC9, DecompBuf2Hi)     // CMP #DecompBuf2Hi ($70)
-	emit(0xA9, 0x100-DecompBufGap) // LDA #$B0 (buffer 1 delta: -$50 = $B0)
+	emit(0xA9, 0x100-DecompBufDist) // LDA #$B0 (buffer 1 delta: -$50 = $B0)
 	emit(0x90, 0x02)             // BCC +2 (if < buf2, keep $B0)
-	emit(0xA9, DecompBufGap)     // LDA #$50 (buffer 2 delta: +$50)
+	emit(0xA9, DecompBufDist)     // LDA #$50 (buffer 2 delta: +$50)
 	label("store_delta")
 	emit(0x85, zpOtherDelta) // STA zpOtherDelta
 

@@ -18,8 +18,9 @@ const (
 	addrLow    = DecompBuf1Hi << 8 // Odd songs (S1, S3, S5, S7, S9)
 	addrHigh   = DecompBuf2Hi << 8 // Even songs (S2, S4, S6, S8)
 
-	// Buffer size for compression - must match C64 buffer gap (DecompBufGap << 8)
-	bufferSize = DecompBufGap << 8 // $1E00 = 7680 bytes
+	// Buffer distance - offset between buffer starts for virtual address space mapping
+	// This is NOT the max song length ($1D00), but the distance to reach the other buffer ($1E00)
+	bufferDist = DecompBufDist << 8 // $1E00 = 7680 bytes
 )
 
 var (
@@ -113,13 +114,13 @@ func normalizeSong(data []byte) {
 }
 
 // MemoryMap tracks readable regions for the 48KB virtual address space.
-// Buffer A (self): addresses 0 to bufferSize-1
-// Buffer B (other): addresses bufferSize to 2*bufferSize-1
+// Buffer A (self): addresses 0 to bufferDist-1
+// Buffer B (other): addresses bufferDist to 2*bufferDist-1
 // Initially all memory is protected. Regions become readable when initialized
 // with dictionary data or when bytes are written during decompression.
 type MemoryMap struct {
-	readable [2 * bufferSize]bool
-	data     [2 * bufferSize]byte
+	readable [2 * bufferDist]bool
+	data     [2 * bufferDist]byte
 }
 
 func NewMemoryMap(selfDict, otherDict []byte) *MemoryMap {
@@ -129,8 +130,8 @@ func NewMemoryMap(selfDict, otherDict []byte) *MemoryMap {
 		m.readable[i] = true
 	}
 	for i, b := range otherDict {
-		m.data[bufferSize+i] = b
-		m.readable[bufferSize+i] = true
+		m.data[bufferDist+i] = b
+		m.readable[bufferDist+i] = true
 	}
 	return m
 }
@@ -140,7 +141,7 @@ func NewMemoryMap(selfDict, otherDict []byte) *MemoryMap {
 func (m *MemoryMap) ProtectOtherScratch() {
 	for _, region := range scratchRegions {
 		for offset := region[0]; offset < region[1]; offset++ {
-			m.readable[bufferSize+offset] = false
+			m.readable[bufferDist+offset] = false
 		}
 	}
 }
@@ -175,13 +176,13 @@ func (m *MemoryMap) Read(addr int) (byte, bool) {
 }
 
 // CanReadAt returns whether addr is readable when output is at position pos.
-// For self buffer (addr < bufferSize): readable only if addr >= pos (not yet overwritten)
-// For other buffer (addr >= bufferSize): readable if initialized
+// For self buffer (addr < bufferDist): readable only if addr >= pos (not yet overwritten)
+// For other buffer (addr >= bufferDist): readable if initialized
 func (m *MemoryMap) CanReadAt(addr, pos int) bool {
 	if !m.CanRead(addr) {
 		return false
 	}
-	if addr < bufferSize {
+	if addr < bufferDist {
 		return addr >= pos
 	}
 	return true
@@ -222,7 +223,7 @@ func compress(target, selfDict, otherDict []byte) ([]byte, int, compressStats) {
 
 	// Backref byte access: at position pos, going backward with distance d
 	//   d ∈ [1, pos]: already-written output (target[pos-d])
-	//   d ∈ (pos, pos+bufferSize]: otherDict via memory map
+	//   d ∈ (pos, pos+bufferDist]: otherDict via memory map
 	getBackrefByte := func(pos, d int) int {
 		if d <= 0 {
 			return -1
@@ -231,7 +232,7 @@ func compress(target, selfDict, otherDict []byte) ([]byte, int, compressStats) {
 			return int(target[pos-d])
 		}
 		// Distance reaches into other buffer
-		addr := bufferSize + pos - d + bufferSize
+		addr := bufferDist + pos - d + bufferDist
 		if b, ok := mem.Read(addr); ok {
 			return int(b)
 		}
@@ -251,7 +252,7 @@ func compress(target, selfDict, otherDict []byte) ([]byte, int, compressStats) {
 	}
 
 	// Index dictionary positions from memory map (both buffers)
-	for addr := 0; addr < 2*bufferSize-1; addr++ {
+	for addr := 0; addr < 2*bufferDist-1; addr++ {
 		b0, ok0 := mem.Read(addr)
 		b1, ok1 := mem.Read(addr + 1)
 		if ok0 && ok1 {
@@ -320,13 +321,13 @@ func compress(target, selfDict, otherDict []byte) ([]byte, int, compressStats) {
 			}
 
 			// Backref from other buffer via memory map
-			// Distance = pos + bufferSize - (addr - bufferSize) = pos + 2*bufferSize - addr
+			// Distance = pos + bufferDist - (addr - bufferDist) = pos + 2*bufferDist - addr
 			if positions, ok := dictHash[key]; ok {
 				for _, addr := range positions {
-					if addr < bufferSize {
+					if addr < bufferDist {
 						continue // only other buffer for backref
 					}
-					dist := pos + 2*bufferSize - addr
+					dist := pos + 2*bufferDist - addr
 					if dist <= 0 || dist > 65535 || seenDists[dist] {
 						continue
 					}
@@ -382,10 +383,10 @@ func compress(target, selfDict, otherDict []byte) ([]byte, int, compressStats) {
 			}
 
 			// Copyother (11111): copy from other buffer with $6000 bias
-			// encoded = addr - pos - bufferSize (for other buffer addresses)
+			// encoded = addr - pos - bufferDist (for other buffer addresses)
 			if positions, ok := dictHash[key]; ok {
 				for _, addr := range positions {
-					if addr < bufferSize {
+					if addr < bufferDist {
 						continue // copyother only from other buffer
 					}
 					if !mem.CanReadAt(addr, pos) {
@@ -395,7 +396,7 @@ func compress(target, selfDict, otherDict []byte) ([]byte, int, compressStats) {
 					if maxLen < 2 {
 						continue
 					}
-					encoded := addr - pos - bufferSize
+					encoded := addr - pos - bufferDist
 					if encoded < 0 {
 						continue // can't encode negative offset
 					}
@@ -542,12 +543,12 @@ func compress(target, selfDict, otherDict []byte) ([]byte, int, compressStats) {
 			writeExpGolomb(offset, kOffset)
 			writeExpGolomb(ch.length-2, kLen)
 			pos += ch.length
-		case 3: // copyother (11111): encoded = addr - pos - bufferSize
+		case 3: // copyother (11111): encoded = addr - pos - bufferDist
 			if ch.length > stats.maxLength {
 				stats.maxLength = ch.length
 			}
 			stats.dictOther++
-			encoded := ch.dictPos - pos - bufferSize
+			encoded := ch.dictPos - pos - bufferDist
 			stats.dictOtherBits += 5 + expGolombBits(encoded, kOffset) + expGolombBits(ch.length-2, kLen)
 			writeBits(0b11111, 5)
 			writeExpGolomb(encoded, kOffset)
@@ -618,8 +619,8 @@ func decompress(compressed, selfDict, otherDict []byte, expectedLen int) []byte 
 	output := make([]byte, 0, expectedLen)
 	otherLen := len(otherDict)
 
-	// Memory layout: selfDict at buffer 1, otherDict at buffer 2 (gap = bufferSize)
-	otherBase := bufferSize
+	// Memory layout: selfDict at buffer 1, otherDict at buffer 2 (gap = bufferDist)
+	otherBase := bufferDist
 
 	// Backref byte access: at position pos with distance d
 	getBackrefByte := func(pos, d int) byte {
@@ -672,22 +673,22 @@ func decompress(compressed, selfDict, otherDict []byte, expectedLen int) []byte 
 			length := reader.readExpGolomb(kLen) + 2
 			ringPos := len(output) + offset
 			for i := 0; i < length; i++ {
-				if ringPos+i < bufferSize {
+				if ringPos+i < bufferDist {
 					output = append(output, selfDict[ringPos+i])
 				} else {
-					output = append(output, otherDict[ringPos+i-bufferSize])
+					output = append(output, otherDict[ringPos+i-bufferDist])
 				}
 			}
 		} else {
 			// Copyother (11111): copy from other buffer
 			encoded := reader.readExpGolomb(kOffset)
 			length := reader.readExpGolomb(kLen) + 2
-			ringPos := len(output) + encoded + bufferSize
+			ringPos := len(output) + encoded + bufferDist
 			for i := 0; i < length; i++ {
-				if ringPos+i < bufferSize {
+				if ringPos+i < bufferDist {
 					output = append(output, selfDict[ringPos+i])
 				} else {
-					output = append(output, otherDict[ringPos+i-bufferSize])
+					output = append(output, otherDict[ringPos+i-bufferDist])
 				}
 			}
 		}
@@ -792,7 +793,7 @@ func main() {
 
 	fmt.Println("V23 Delta Compression (Go)")
 	fmt.Println("==========================")
-	fmt.Printf("Memory layout: $%04X (odd), $%04X (even), %d bytes each\n\n", addrLow, addrHigh, bufferSize)
+	fmt.Printf("Memory layout: $%04X (odd), $%04X (even), %d bytes each\n\n", addrLow, addrHigh, bufferDist)
 
 	// Precompute all buffer states - buffers are deterministic from original songs
 	// Buffer state before compressing song N = result of "loading" songs 1..N-1
@@ -809,8 +810,8 @@ func main() {
 	states := make(map[int]bufferState)
 
 	// Initial state: S1 at $1000, S2 at $7000
-	buf1000 := make([]byte, bufferSize)
-	buf7000 := make([]byte, bufferSize)
+	buf1000 := make([]byte, bufferDist)
+	buf7000 := make([]byte, bufferDist)
 	copy(buf1000, songs[1])
 	copy(buf7000, songs[2])
 	len1000 := len(songs[1])
