@@ -1524,9 +1524,9 @@ func convertToNewFormat(raw []byte, songNum int, prevTables *PrevSongTables, eff
 	trackptr2Off := 0x700
 	filterOff := 0x800         // Filter at $800 (227 bytes max)
 	arpOff := 0x8E3            // Arp at $8E3 (188 bytes max)
-	rowDictOff := 0x99F        // Row dict0 (notes), dict1 at +410, dict2 at +820
-	packedPtrsOff := 0xE6D     // Packed pointers (182 bytes = 91 patterns × 2)
-	packedDataOff := 0xF23     // Packed pattern data
+	rowDictOff := 0x99F        // Row dict0 (notes), dict1 at +399, dict2 at +798
+	packedPtrsOff := 0xE4C     // Packed pointers (182 bytes = 91 patterns × 2)
+	packedDataOff := 0xF02     // Packed pattern data
 
 	// Extract patterns to slice for packing (do effect/order remapping first)
 	patternData := make([][]byte, numPatterns)
@@ -1740,14 +1740,14 @@ func convertToNewFormat(raw []byte, songNum int, prevTables *PrevSongTables, eff
 	copy(out[arpOff:], newArpTable)
 
 	// Write pattern packing data
-	// Row dictionary in split format: 3 arrays of 409 bytes each (dict[0] implicit)
+	// Row dictionary in split format: 3 arrays of 399 bytes each (dict[0] implicit)
 	// dict0 (notes), dict1 (inst|effect), dict2 (params)
 	// dict[0] is always [0,0,0], not stored - dict[1] starts at offset 0
 	numEntries := len(dict) / 3
 	for i := 1; i < numEntries; i++ {
 		out[rowDictOff+i-1] = dict[i*3]         // note (dict[i] at offset i-1)
-		out[rowDictOff+410+i-1] = dict[i*3+1]   // inst|effect
-		out[rowDictOff+820+i-1] = dict[i*3+2]   // param
+		out[rowDictOff+399+i-1] = dict[i*3+1]   // inst|effect
+		out[rowDictOff+798+i-1] = dict[i*3+2]   // param
 	}
 	// Packed pointers (offset into packed data per pattern)
 	for i, pOff := range patOffsets {
@@ -4005,8 +4005,8 @@ func main() {
 		// dict[0] = [0,0,0] (implicit, already zero in fresh slice)
 		for i := 1; i < numEntries; i++ {
 			prevDict[i*3] = convertedData[rowDictOff+i-1]       // note (dict[i] at file offset i-1)
-			prevDict[i*3+1] = convertedData[rowDictOff+410+i-1] // inst|effect
-			prevDict[i*3+2] = convertedData[rowDictOff+820+i-1] // param
+			prevDict[i*3+1] = convertedData[rowDictOff+399+i-1] // inst|effect
+			prevDict[i*3+2] = convertedData[rowDictOff+798+i-1] // param
 		}
 		prevTables = &PrevSongTables{
 			Arp:     append([]byte{}, convertedData[arpOff:arpOff+stats.NewArpSize]...),
@@ -4046,8 +4046,8 @@ func main() {
 		data := convertedSongs[songNum-1]
 		for i := 0; i < numEntries; i++ {
 			interleavedDict[i*3] = data[rowDictOffAnalysis+i]
-			interleavedDict[i*3+1] = data[rowDictOffAnalysis+410+i]
-			interleavedDict[i*3+2] = data[rowDictOffAnalysis+820+i]
+			interleavedDict[i*3+1] = data[rowDictOffAnalysis+399+i]
+			interleavedDict[i*3+2] = data[rowDictOffAnalysis+798+i]
 		}
 		combos := analyzeRowDictCombinations(interleavedDict)
 		for i := 0; i < 8; i++ {
@@ -4119,7 +4119,7 @@ func main() {
 			cycleRatio := float64(r.newCycles) / float64(r.builtinCycles)
 			maxCycleRatio := float64(r.newMaxCycles) / float64(r.builtinMaxCycles)
 			sizeRatio := float64(r.newSize) / float64(r.origSize)
-			fmt.Printf("Song %d: cycles: %.2fx, max: %.2fx, size: %.2fx, dict: %d, eq: %d\n", r.songNum, cycleRatio, maxCycleRatio, sizeRatio, s.PatternDictSize, s.ExtendedBeforeEquiv)
+			fmt.Printf("Song %d: cycles: %.2fx, max: %.2fx, size: %.2fx, dict: %d, eq: %d, len: $%X\n", r.songNum, cycleRatio, maxCycleRatio, sizeRatio, s.PatternDictSize, s.ExtendedBeforeEquiv, r.newSize)
 			if s.NewWaveSize > maxWave {
 				maxWave = s.NewWaveSize
 			}
@@ -4388,8 +4388,8 @@ func testEquivalenceSong(songNum int, convertedData []byte, dictSize int, player
 	// Dict entries 1..N are stored at offsets 0..N-1
 	for idx := 1; idx < dictSize; idx++ {
 		note := convertedData[0x99F+idx-1]
-		instEffect := convertedData[0x99F+410+idx-1]
-		param := convertedData[0x99F+820+idx-1]
+		instEffect := convertedData[0x99F+399+idx-1]
+		param := convertedData[0x99F+798+idx-1]
 
 		sigGroups[signature{instEffect, param}] = append(sigGroups[signature{instEffect, param}], idx)
 		noteGroups[note] = append(noteGroups[note], idx)
@@ -4413,7 +4413,7 @@ func testEquivalenceSong(songNum int, convertedData []byte, dictSize int, player
 		if idx == 0 {
 			return "000000"
 		}
-		return fmt.Sprintf("%02x%02x%02x", convertedData[0x99F+idx-1], convertedData[0x99F+410+idx-1], convertedData[0x99F+820+idx-1])
+		return fmt.Sprintf("%02x%02x%02x", convertedData[0x99F+idx-1], convertedData[0x99F+399+idx-1], convertedData[0x99F+798+idx-1])
 	}
 
 	type equivMatch struct {
@@ -4446,8 +4446,8 @@ func testEquivalenceSong(songNum int, convertedData []byte, dictSize int, player
 			for testIdx := range jobs {
 				// Entry testIdx is at offset testIdx-1
 				testNote := convertedData[0x99F+testIdx-1]
-				testInstEffect := convertedData[0x99F+410+testIdx-1]
-				testParam := convertedData[0x99F+820+testIdx-1]
+				testInstEffect := convertedData[0x99F+399+testIdx-1]
+				testParam := convertedData[0x99F+798+testIdx-1]
 
 				var candidates []candidate
 				seen := make(map[int]bool)
@@ -4487,13 +4487,13 @@ func testEquivalenceSong(songNum int, convertedData []byte, dictSize int, player
 					testOff := uint16(testIdx - 1)
 					if cand.idx == 0 {
 						workerCPU.Memory[bufferBase+0x99F+testOff] = 0
-						workerCPU.Memory[bufferBase+0x99F+410+testOff] = 0
-						workerCPU.Memory[bufferBase+0x99F+820+testOff] = 0
+						workerCPU.Memory[bufferBase+0x99F+399+testOff] = 0
+						workerCPU.Memory[bufferBase+0x99F+798+testOff] = 0
 					} else {
 						candOff := uint16(cand.idx - 1)
 						workerCPU.Memory[bufferBase+0x99F+testOff] = workerCPU.Memory[bufferBase+0x99F+candOff]
-						workerCPU.Memory[bufferBase+0x99F+410+testOff] = workerCPU.Memory[bufferBase+0x99F+410+candOff]
-						workerCPU.Memory[bufferBase+0x99F+820+testOff] = workerCPU.Memory[bufferBase+0x99F+820+candOff]
+						workerCPU.Memory[bufferBase+0x99F+399+testOff] = workerCPU.Memory[bufferBase+0x99F+399+candOff]
+						workerCPU.Memory[bufferBase+0x99F+798+testOff] = workerCPU.Memory[bufferBase+0x99F+798+candOff]
 					}
 
 					if workerCPU.RunFramesMatch(playerBase+3, testFrames, baseline) {

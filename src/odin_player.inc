@@ -31,11 +31,11 @@ zp_dict2         = $20          ; 2 bytes: dict2 (param bytes)
 ; $500: Trackptr ch0-2 (256 bytes each)
 ; $800: Filtertable (227 bytes max)
 ; $8E3: Arptable (188 bytes max)
-; $99F: Row dict0 (410 bytes) - note bytes
-; $B39: Row dict1 (410 bytes) - inst|effect bytes
-; $CD3: Row dict2 (410 bytes) - param bytes
-; $E6D: Packed pointers (182 bytes = 91 patterns × 2)
-; $F23: Packed pattern data
+; $99F: Row dict0 (399 bytes) - note bytes
+; $B2E: Row dict1 (399 bytes) - inst|effect bytes
+; $CBD: Row dict2 (399 bytes) - param bytes
+; $E4C: Packed pointers (182 bytes = 91 patterns × 2)
+; $F02: Packed pattern data
 ;
 ; Global wavetable (163 bytes) is stored in player, shared across all songs.
 ; Instrument wave indices point directly into global_wavetable.
@@ -72,8 +72,9 @@ zp_dict2         = $20          ; 2 bytes: dict2 (param bytes)
 
 ; Pattern packing constants
 ROW_DICT_OFF        = $99F
-PACKED_PTRS_OFF     = $E6D
-PACKED_DATA_OFF     = $F23
+ROW_DICT_SIZE       = 399
+PACKED_PTRS_OFF     = $E4C
+PACKED_DATA_OFF     = $F02
 
 ; Instrument parameter offsets within 16-byte instrument block
 INST_AD          = 0
@@ -161,7 +162,7 @@ player_init:
         sta     chn_decoded_row+1
         sta     chn_decoded_row+2
         jsr     checkpoint
-        ; Set up split dictionary pointers (3 arrays of 410 bytes each)
+        ; Set up split dictionary pointers (3 arrays of ROW_DICT_SIZE bytes each)
         ; dict0 (notes) at ROW_DICT_OFF
         lda     zp_song_base
         clc
@@ -170,21 +171,21 @@ player_init:
         lda     zp_song_base+1
         adc     #>ROW_DICT_OFF
         sta     zp_dict0+1
-        ; dict1 (inst|effect) at ROW_DICT_OFF + 410
+        ; dict1 (inst|effect) at ROW_DICT_OFF + ROW_DICT_SIZE
         lda     zp_dict0
         clc
-        adc     #<410
+        adc     #<ROW_DICT_SIZE
         sta     zp_dict1
         lda     zp_dict0+1
-        adc     #>410
+        adc     #>ROW_DICT_SIZE
         sta     zp_dict1+1
-        ; dict2 (params) at ROW_DICT_OFF + 820
+        ; dict2 (params) at ROW_DICT_OFF + ROW_DICT_SIZE*2
         lda     zp_dict1
         clc
-        adc     #<410
+        adc     #<ROW_DICT_SIZE
         sta     zp_dict2
         lda     zp_dict1+1
-        adc     #>410
+        adc     #>ROW_DICT_SIZE
         sta     zp_dict2+1
         ; Set packed_ptrs_addr = song_base + PACKED_PTRS_OFF
         lda     zp_song_base

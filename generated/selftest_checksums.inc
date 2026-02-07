@@ -11,14 +11,14 @@ selftest_checksums:
         .word   $45E8               ; Song 9
 
 selftest_sizes:
-        .word   7401                ; Song 1
-        .word   6130                ; Song 2
-        .word   6672                ; Song 3
-        .word   7197                ; Song 4
-        .word   6906                ; Song 5
-        .word   6241                ; Song 6
-        .word   5927                ; Song 7
-        .word   6320                ; Song 8
-        .word   7323                ; Song 9
+        .word   7368                ; Song 1
+        .word   6097                ; Song 2
+        .word   6639                ; Song 3
+        .word   7164                ; Song 4
+        .word   6873                ; Song 5
+        .word   6208                ; Song 6
+        .word   5894                ; Song 7
+        .word   6287                ; Song 8
+        .word   7290                ; Song 9
 
-selftest_stream_csum:  .word $8490
+selftest_stream_csum:  .word $C266
