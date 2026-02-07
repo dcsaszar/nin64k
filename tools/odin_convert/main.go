@@ -15,6 +15,8 @@ import (
 )
 
 var projectRoot string
+var disableEquivSong int
+var equivtestMode bool
 
 func init() {
 	projectRoot = findProjectRoot()
@@ -1526,9 +1528,9 @@ func convertToNewFormat(raw []byte, songNum int, prevTables *PrevSongTables, eff
 	trackptr2Off := 0x700
 	filterOff := 0x800         // Filter at $800 (227 bytes max)
 	arpOff := 0x8E3            // Arp at $8E3 (188 bytes max)
-	rowDictOff := 0x99F        // Row dict0 (notes), dict1 at +399, dict2 at +798
-	packedPtrsOff := 0xE4C     // Packed pointers (182 bytes = 91 patterns × 2)
-	packedDataOff := 0xF02     // Packed pattern data
+	rowDictOff := 0x99F        // Row dict0 (notes), dict1 at +396, dict2 at +792
+	packedPtrsOff := 0xE43     // Packed pointers (182 bytes = 91 patterns × 2)
+	packedDataOff := 0xEF9     // Packed pattern data
 
 	// Extract patterns to slice for packing (do effect/order remapping first)
 	patternData := make([][]byte, numPatterns)
@@ -1611,11 +1613,13 @@ func convertToNewFormat(raw []byte, songNum int, prevTables *PrevSongTables, eff
 	// Build without prevDict - cross-song matching happens after compaction
 	dict, _ := buildPatternDict(allPatternData, nil)
 
-	// Load equivalence map for this song (row-based, position-independent)
-	equivMap := loadSongEquivMap(songNum, dict)
+	// Optimize equiv map for smallest dict (fast, no packing needed)
+	var equivMap map[int]int
+	if !equivtestMode && (disableEquivSong == 0 || songNum != disableEquivSong) {
+		equivMap = optimizeEquivMapMinDict(songNum, dict, patternData)
+	}
 
-	// Pack patterns with per-song dictionary + RLE
-	// Pass the already-built dict for consistency with equivMap lookup
+	// Pack patterns with optimized equiv map
 	dict, packed, patOffsets, primaryCount, extendedCount, extendedBeforeEquiv := packPatternsWithEquiv(patternData, dict, equivMap, prevDict, patternTruncate)
 
 	stats.PrimaryIndices = primaryCount
@@ -1623,18 +1627,20 @@ func convertToNewFormat(raw []byte, songNum int, prevTables *PrevSongTables, eff
 	stats.ExtendedBeforeEquiv = extendedBeforeEquiv
 
 	// Fixed layout:
-	// $9D9: row dictionary (1236 bytes = 412 entries × 3)
-	// $EAD: packed pointers (182 bytes = 91 patterns × 2)
-	// $F63: packed data
+	// $99F: row dictionary (1188 bytes = 396 entries × 3, split format)
+	// $E43: packed pointers (182 bytes = 91 patterns × 2)
+	// $EF9: packed data
 	packedSize := len(packed)
 	totalSize := packedDataOff + packedSize
 
-	// Validate limits
-	if numPatterns > 91 {
-		panic(fmt.Sprintf("too many patterns: %d (max 91)", numPatterns))
-	}
-	if len(dict)/3 > 412 {
-		panic(fmt.Sprintf("dictionary too large: %d entries (max 412)", len(dict)/3))
+	// Validate limits (skip in equivtest mode - we're just building the cache)
+	if !equivtestMode {
+		if numPatterns > 91 {
+			panic(fmt.Sprintf("too many patterns: %d (max 91)", numPatterns))
+		}
+		if len(dict)/3 > 397 {
+			panic(fmt.Sprintf("dictionary too large: %d entries (max 397)", len(dict)/3))
+		}
 	}
 
 	out := make([]byte, totalSize)
@@ -1742,14 +1748,14 @@ func convertToNewFormat(raw []byte, songNum int, prevTables *PrevSongTables, eff
 	copy(out[arpOff:], newArpTable)
 
 	// Write pattern packing data
-	// Row dictionary in split format: 3 arrays of 399 bytes each (dict[0] implicit)
+	// Row dictionary in split format: 3 arrays of 396 bytes each (dict[0] implicit)
 	// dict0 (notes), dict1 (inst|effect), dict2 (params)
 	// dict[0] is always [0,0,0], not stored - dict[1] starts at offset 0
 	numEntries := len(dict) / 3
 	for i := 1; i < numEntries; i++ {
 		out[rowDictOff+i-1] = dict[i*3]         // note (dict[i] at offset i-1)
-		out[rowDictOff+399+i-1] = dict[i*3+1]   // inst|effect
-		out[rowDictOff+798+i-1] = dict[i*3+2]   // param
+		out[rowDictOff+396+i-1] = dict[i*3+1]   // inst|effect
+		out[rowDictOff+792+i-1] = dict[i*3+2]   // param
 	}
 	// Packed pointers (offset into packed data per pattern)
 	for i, pOff := range patOffsets {
@@ -1919,8 +1925,12 @@ func loadEquivCache() []EquivResult {
 
 // loadSongEquivMap returns equivalence map for a specific song
 // Uses verified equivalences from equiv_cache (row hex -> row hex)
-// Converts to index -> index map using the provided dict
-func loadSongEquivMap(songNum int, dict []byte) map[int]int {
+// Comprehensive optimization:
+// 1. Strongly prefer index 0 (zero row) - row disappears, uses zero-RLE encoding
+// 2. Analyze patterns for RLE opportunities - map consecutive rows to same target
+// 3. Allow primary row elimination - free up dict space for extended rows
+// 4. Prefer already-used targets - no new dict entries needed
+func loadSongEquivMap(songNum int, dict []byte, patterns [][]byte) map[int]int {
 	if songNum < 1 || songNum > 9 {
 		return nil
 	}
@@ -1936,32 +1946,318 @@ func loadSongEquivMap(songNum int, dict []byte) map[int]int {
 	}
 
 	// Build row hex -> index map from dict
-	// Dict format: entry i at offset i*3 (dict[0] implicit)
 	numEntries := len(dict) / 3
 	rowToIdx := make(map[string]int)
+	idxToHex := make(map[int]string)
+	rowToIdx["000000"] = 0
+	idxToHex[0] = "000000"
 	for idx := 1; idx < numEntries; idx++ {
 		rowHex := fmt.Sprintf("%02x%02x%02x", dict[idx*3], dict[idx*3+1], dict[idx*3+2])
 		rowToIdx[rowHex] = idx
+		idxToHex[idx] = rowHex
 	}
 
-	// Convert row hex equiv to index equiv
-	// For each extended row, find the best replacement (lowest index in dict)
-	equivMap := make(map[int]int)
-	for extRowHex, priRowHexList := range songEquiv {
-		extIdx, extOk := rowToIdx[extRowHex]
-		if !extOk {
+	// Collect rows used in patterns and count consecutive pairs
+	// consecutivePairs[hexA][hexB] = count of times A is followed by B (after RLE)
+	usedHex := make(map[string]bool)
+	usedHex["000000"] = true
+	consecutivePairs := make(map[string]map[string]int)
+	for _, pat := range patterns {
+		var prevRow [3]byte
+		var prevHex string
+		numRows := len(pat) / 3
+		for row := 0; row < numRows; row++ {
+			off := row * 3
+			curRow := [3]byte{pat[off], pat[off+1], pat[off+2]}
+			if curRow != prevRow {
+				curHex := fmt.Sprintf("%02x%02x%02x", curRow[0], curRow[1], curRow[2])
+				usedHex[curHex] = true
+				if prevHex != "" && prevHex != curHex {
+					if consecutivePairs[prevHex] == nil {
+						consecutivePairs[prevHex] = make(map[string]int)
+					}
+					consecutivePairs[prevHex][curHex]++
+				}
+				prevHex = curHex
+			}
+			prevRow = curRow
+		}
+	}
+
+	// Build equiv options for ALL used rows (not just extended)
+	// This allows primary rows to be eliminated too
+	type equivRow struct {
+		idx     int
+		hex     string
+		options []int // indices this row can map to (must be < idx)
+	}
+	var equivRows []equivRow
+	for rowHex, optionHexList := range songEquiv {
+		idx, idxOk := rowToIdx[rowHex]
+		if !idxOk || !usedHex[rowHex] {
 			continue
 		}
-		bestPriIdx := -1
-		for _, priRowHex := range priRowHexList {
-			if priIdx, ok := rowToIdx[priRowHex]; ok {
-				if bestPriIdx == -1 || priIdx < bestPriIdx {
-					bestPriIdx = priIdx
+		var options []int
+		for _, optHex := range optionHexList {
+			if optIdx, ok := rowToIdx[optHex]; ok && optIdx < idx {
+				options = append(options, optIdx)
+			}
+		}
+		if len(options) > 0 {
+			equivRows = append(equivRows, equivRow{idx: idx, hex: rowHex, options: options})
+		}
+	}
+
+	// Sort: rows that can map to 0 first, then by fewest options
+	for i := 0; i < len(equivRows)-1; i++ {
+		for j := i + 1; j < len(equivRows); j++ {
+			iHasZero := false
+			jHasZero := false
+			for _, opt := range equivRows[i].options {
+				if opt == 0 {
+					iHasZero = true
+					break
+				}
+			}
+			for _, opt := range equivRows[j].options {
+				if opt == 0 {
+					jHasZero = true
+					break
+				}
+			}
+			swap := false
+			if jHasZero && !iHasZero {
+				swap = true
+			} else if jHasZero == iHasZero && len(equivRows[j].options) < len(equivRows[i].options) {
+				swap = true
+			}
+			if swap {
+				equivRows[i], equivRows[j] = equivRows[j], equivRows[i]
+			}
+		}
+	}
+
+	// Build equiv map with comprehensive scoring
+	const primaryMax = 225
+	equivMap := make(map[int]int)
+
+	// Track what each row maps to (for RLE analysis)
+	effectiveIdx := make(map[string]int)
+	for hex, idx := range rowToIdx {
+		effectiveIdx[hex] = idx
+	}
+
+	for _, er := range equivRows {
+		bestTarget := -1
+		bestScore := -1
+
+		for _, targetIdx := range er.options {
+			targetHex := idxToHex[targetIdx]
+			score := 0
+
+			// Huge bonus for index 0 - row disappears, uses zero-RLE
+			if targetIdx == 0 {
+				score += 1000000
+			}
+
+			// Big bonus if target is already used (no new dict entry)
+			if usedHex[targetHex] {
+				score += 100000
+			}
+
+			// Bonus for RLE opportunities: if this row is consecutive with another
+			// row that maps to the same target, we create RLE
+			for neighborHex, count := range consecutivePairs[er.hex] {
+				if effectiveIdx[neighborHex] == targetIdx {
+					score += count * 5000
+				}
+			}
+			for neighborHex, pairs := range consecutivePairs {
+				if pairs[er.hex] > 0 && effectiveIdx[neighborHex] == targetIdx {
+					score += pairs[er.hex] * 5000
+				}
+			}
+
+			// Bonus for primary index (1-byte encoding)
+			if targetIdx < primaryMax {
+				score += 10000
+			}
+
+			// Small bonus for lower index
+			score += (1000 - targetIdx)
+
+			if score > bestScore {
+				bestScore = score
+				bestTarget = targetIdx
+			}
+		}
+
+		if bestTarget >= 0 {
+			equivMap[er.idx] = bestTarget
+			effectiveIdx[er.hex] = bestTarget
+			usedHex[idxToHex[bestTarget]] = true
+		}
+	}
+
+	return equivMap
+}
+
+// optimizeEquivMapMinDict minimizes dictionary size by mapping rows to already-used targets or idx 0
+func optimizeEquivMapMinDict(songNum int, dict []byte, patterns [][]byte) map[int]int {
+	if songNum < 1 || songNum > 9 {
+		return nil
+	}
+
+	equivCache := loadEquivCache()
+	if equivCache == nil {
+		return nil
+	}
+	songEquiv := equivCache[songNum-1].Equiv
+	if len(songEquiv) == 0 {
+		return nil
+	}
+
+	// Build row hex -> index map
+	numEntries := len(dict) / 3
+	rowToIdx := make(map[string]int)
+	idxToHex := make(map[int]string)
+	rowToIdx["000000"] = 0
+	idxToHex[0] = "000000"
+	for idx := 1; idx < numEntries; idx++ {
+		rowHex := fmt.Sprintf("%02x%02x%02x", dict[idx*3], dict[idx*3+1], dict[idx*3+2])
+		rowToIdx[rowHex] = idx
+		idxToHex[idx] = rowHex
+	}
+
+	// Collect rows used in patterns (these form the initial "needed" set)
+	usedInPatterns := make(map[int]bool)
+	usedInPatterns[0] = true
+	for _, pat := range patterns {
+		var prevRow [3]byte
+		numRows := len(pat) / 3
+		for row := 0; row < numRows; row++ {
+			off := row * 3
+			curRow := [3]byte{pat[off], pat[off+1], pat[off+2]}
+			if curRow != prevRow {
+				rowHex := fmt.Sprintf("%02x%02x%02x", curRow[0], curRow[1], curRow[2])
+				if idx, ok := rowToIdx[rowHex]; ok {
+					usedInPatterns[idx] = true
+				}
+			}
+			prevRow = curRow
+		}
+	}
+
+	// Build equiv options (Song 2 restricted to extended rows only due to bad equiv entry)
+	const primaryMax = 225
+	type equivRow struct {
+		idx     int
+		options []int
+		hasZero bool
+	}
+	var rows []equivRow
+	for rowHex, optionHexList := range songEquiv {
+		idx, ok := rowToIdx[rowHex]
+		if !ok || !usedInPatterns[idx] {
+			continue
+		}
+		var options []int
+		hasZero := false
+		for _, optHex := range optionHexList {
+			if optIdx, ok := rowToIdx[optHex]; ok && optIdx < idx {
+				// Song 2 workaround: extended can only map to extended (bad cache entry)
+				if songNum == 2 && idx >= primaryMax && optIdx < primaryMax {
+					continue
+				}
+				options = append(options, optIdx)
+				if optIdx == 0 {
+					hasZero = true
 				}
 			}
 		}
-		if bestPriIdx >= 0 && bestPriIdx < extIdx {
-			equivMap[extIdx] = bestPriIdx
+		if len(options) > 0 {
+			rows = append(rows, equivRow{idx: idx, options: options, hasZero: hasZero})
+		}
+	}
+
+	// Sort: rows with idx 0 option first, then fewest options, then by idx for determinism
+	for i := 0; i < len(rows)-1; i++ {
+		for j := i + 1; j < len(rows); j++ {
+			swap := false
+			if rows[j].hasZero && !rows[i].hasZero {
+				swap = true
+			} else if rows[j].hasZero == rows[i].hasZero {
+				if len(rows[j].options) < len(rows[i].options) {
+					swap = true
+				} else if len(rows[j].options) == len(rows[i].options) && rows[j].idx < rows[i].idx {
+					swap = true
+				}
+			}
+			if swap {
+				rows[i], rows[j] = rows[j], rows[i]
+			}
+		}
+	}
+
+	// Track which indices will be used after equiv (start with patterns)
+	finalUsed := make(map[int]bool)
+	for idx := range usedInPatterns {
+		finalUsed[idx] = true
+	}
+
+	// Build equiv map: only map if target is already used (reduces dict)
+	equivMap := make(map[int]int)
+
+	// First pass: map to idx 0 (always reduces dict by 1)
+	for _, r := range rows {
+		if r.hasZero {
+			equivMap[r.idx] = 0
+			delete(finalUsed, r.idx)
+		}
+	}
+
+	// Second pass: map to already-used targets (reduces dict by 1)
+	for _, r := range rows {
+		if _, mapped := equivMap[r.idx]; mapped {
+			continue
+		}
+
+		bestTarget := -1
+		for _, opt := range r.options {
+			if finalUsed[opt] && (bestTarget < 0 || opt < bestTarget) {
+				bestTarget = opt
+			}
+		}
+
+		if bestTarget >= 0 {
+			equivMap[r.idx] = bestTarget
+			delete(finalUsed, r.idx)
+		}
+	}
+
+	// Third pass: cluster unmapped rows - only if target already in finalUsed
+	// Keep iterating as each mapping may enable more
+	changed := true
+	for changed {
+		changed = false
+		for _, r := range rows {
+			if _, mapped := equivMap[r.idx]; mapped {
+				continue
+			}
+
+			// Only consider targets already in finalUsed
+			bestTarget := -1
+			for _, opt := range r.options {
+				if finalUsed[opt] && (bestTarget < 0 || opt < bestTarget) {
+					bestTarget = opt
+				}
+			}
+
+			if bestTarget >= 0 {
+				equivMap[r.idx] = bestTarget
+				delete(finalUsed, r.idx)
+				changed = true
+			}
 		}
 	}
 
@@ -2097,7 +2393,7 @@ func packPatternsWithEquiv(patterns [][]byte, inputDict []byte, equivMap map[int
 			curRow := [3]byte{pat[off], pat[off+1], pat[off+2]}
 			if curRow != prevRow {
 				idx := rowToIdx[string(curRow[:])]
-				if idx >= primaryMax && equivMap != nil {
+				if equivMap != nil {
 					if priIdx, ok := equivMap[idx]; ok {
 						idx = priIdx
 						equivSubstitutions++
@@ -2238,7 +2534,7 @@ func packPatternsWithEquiv(patterns [][]byte, inputDict []byte, equivMap map[int
 				idx := rowToIdx[string(curRow[:])]
 
 				// Apply equivalence
-				if idx >= primaryMax && equivMap != nil {
+				if equivMap != nil {
 					if priIdx, ok := equivMap[idx]; ok {
 						idx = priIdx
 					}
@@ -2674,40 +2970,45 @@ func (c *CPU6502) addrImmediate() uint16 {
 }
 
 func (c *CPU6502) addrZeroPage() uint16 {
-	addr := uint16(c.Read(c.PC))
+	addr := uint16(c.Memory[c.PC])
 	c.PC++
 	return addr
 }
 
 func (c *CPU6502) addrZeroPageX() uint16 {
-	addr := uint16(c.Read(c.PC) + c.X)
+	addr := uint16(c.Memory[c.PC] + c.X)
 	c.PC++
 	return addr
 }
 
 func (c *CPU6502) addrZeroPageY() uint16 {
-	addr := uint16(c.Read(c.PC) + c.Y)
+	addr := uint16(c.Memory[c.PC] + c.Y)
 	c.PC++
 	return addr
 }
 
 func (c *CPU6502) addrAbsolute() uint16 {
-	addr := c.Read16(c.PC)
+	lo := uint16(c.Memory[c.PC])
+	hi := uint16(c.Memory[c.PC+1])
 	c.PC += 2
-	return addr
+	return hi<<8 | lo
 }
 
 func (c *CPU6502) addrAbsoluteX() (uint16, bool) {
-	base := c.Read16(c.PC)
+	lo := uint16(c.Memory[c.PC])
+	hi := uint16(c.Memory[c.PC+1])
 	c.PC += 2
+	base := hi<<8 | lo
 	addr := base + uint16(c.X)
 	crossed := (base & 0xFF00) != (addr & 0xFF00)
 	return addr, crossed
 }
 
 func (c *CPU6502) addrAbsoluteY() (uint16, bool) {
-	base := c.Read16(c.PC)
+	lo := uint16(c.Memory[c.PC])
+	hi := uint16(c.Memory[c.PC+1])
 	c.PC += 2
+	base := hi<<8 | lo
 	addr := base + uint16(c.Y)
 	crossed := (base & 0xFF00) != (addr & 0xFF00)
 	return addr, crossed
@@ -2753,7 +3054,7 @@ func (c *CPU6502) Step() bool {
 		c.LastCheckpointCycle = c.Cycles
 		c.LastCheckpointCaller = caller
 	}
-	opcode := c.Read(c.PC)
+	opcode := c.Memory[c.PC]
 	c.PC++
 
 	switch opcode {
@@ -3605,7 +3906,10 @@ func main() {
 	if len(os.Args) > 1 {
 		switch os.Args[1] {
 		case "-equivtest":
-			// Handled after songs are converted
+			equivtestMode = true
+			if len(os.Args) > 2 {
+				fmt.Sscanf(os.Args[2], "%d", &disableEquivSong)
+			}
 		case "-h", "-help", "--help":
 			printUsage()
 			return
@@ -4018,8 +4322,8 @@ func main() {
 		// dict[0] = [0,0,0] (implicit, already zero in fresh slice)
 		for i := 1; i < numEntries; i++ {
 			prevDict[i*3] = convertedData[rowDictOff+i-1]       // note (dict[i] at file offset i-1)
-			prevDict[i*3+1] = convertedData[rowDictOff+399+i-1] // inst|effect
-			prevDict[i*3+2] = convertedData[rowDictOff+798+i-1] // param
+			prevDict[i*3+1] = convertedData[rowDictOff+396+i-1] // inst|effect
+			prevDict[i*3+2] = convertedData[rowDictOff+792+i-1] // param
 		}
 		prevTables = &PrevSongTables{
 			Arp:     append([]byte{}, convertedData[arpOff:arpOff+stats.NewArpSize]...),
@@ -4059,8 +4363,8 @@ func main() {
 		data := convertedSongs[songNum-1]
 		for i := 0; i < numEntries; i++ {
 			interleavedDict[i*3] = data[rowDictOffAnalysis+i]
-			interleavedDict[i*3+1] = data[rowDictOffAnalysis+399+i]
-			interleavedDict[i*3+2] = data[rowDictOffAnalysis+798+i]
+			interleavedDict[i*3+1] = data[rowDictOffAnalysis+396+i]
+			interleavedDict[i*3+2] = data[rowDictOffAnalysis+792+i]
 		}
 		combos := analyzeRowDictCombinations(interleavedDict)
 		for i := 0; i < 8; i++ {
@@ -4132,7 +4436,7 @@ func main() {
 			cycleRatio := float64(r.newCycles) / float64(r.builtinCycles)
 			maxCycleRatio := float64(r.newMaxCycles) / float64(r.builtinMaxCycles)
 			sizeRatio := float64(r.newSize) / float64(r.origSize)
-			fmt.Printf("Song %d: cycles: %.2fx, max: %.2fx, size: %.2fx, dict: %d, eq: %d, len: $%X\n", r.songNum, cycleRatio, maxCycleRatio, sizeRatio, s.PatternDictSize, s.ExtendedBeforeEquiv, r.newSize)
+			fmt.Printf("Song %d: cycles: %.2fx, max: %.2fx, size: %.2fx, dict: %d, len: $%X, eq: %d\n", r.songNum, cycleRatio, maxCycleRatio, sizeRatio, s.PatternDictSize, r.newSize, s.ExtendedBeforeEquiv)
 			if s.NewWaveSize > maxWave {
 				maxWave = s.NewWaveSize
 			}
@@ -4271,14 +4575,14 @@ func main() {
 			fmt.Printf("\nSlowest checkpoint: %s cycles (from $%04X to $%04X)\n", commas(worstGapVal), worstGapFrom, worstGapTo)
 		}
 
-	} else {
+	} else if !equivtestMode {
 		os.Exit(1)
 	}
 
 	// Equiv test if requested
-	if len(os.Args) > 1 && os.Args[1] == "-equivtest" {
+	if equivtestMode {
 		fmt.Println("\n=== Equivalence Test ===")
-		runEquivTest(convertedSongs, convertedStats, playerData)
+		runEquivTest(convertedSongs, convertedStats, playerData, disableEquivSong)
 	}
 }
 
@@ -4810,8 +5114,12 @@ func findInstructionStarts(data []byte, base uint16) []uint16 {
 }
 
 // runEquivTest tests all pairs to build the equivalence cache
-func runEquivTest(convertedSongs [][]byte, convertedStats []ConversionStats, playerData []byte) {
+// If onlySong > 0, only test that song
+func runEquivTest(convertedSongs [][]byte, convertedStats []ConversionStats, playerData []byte, onlySong int) {
 	fmt.Println("Testing ALL pairs with full song duration (highly parallel)...")
+	if onlySong > 0 {
+		fmt.Printf("Filtering to song %d only\n", onlySong)
+	}
 
 	results := make([]EquivResult, 9)
 	songMu := make([]sync.Mutex, 9)
@@ -4819,9 +5127,27 @@ func runEquivTest(convertedSongs [][]byte, convertedStats []ConversionStats, pla
 		results[i] = EquivResult{SongNum: i + 1, Equiv: make(map[string][]string)}
 	}
 
+	// Load existing cache to preserve data for songs not being tested
+	if onlySong > 0 {
+		cacheFile := projectPath("tools/odin_convert/equiv_cache.json")
+		if data, err := os.ReadFile(cacheFile); err == nil {
+			var existing []EquivResult
+			if json.Unmarshal(data, &existing) == nil {
+				for _, e := range existing {
+					if e.SongNum != onlySong && e.SongNum >= 1 && e.SongNum <= 9 {
+						results[e.SongNum-1].Equiv = e.Equiv
+					}
+				}
+			}
+		}
+	}
+
 	var totalPairs int64
 	songPairs := make([]int64, 9)
 	for songNum := 1; songNum <= 9; songNum++ {
+		if onlySong > 0 && songNum != onlySong {
+			continue
+		}
 		if convertedSongs[songNum-1] == nil {
 			continue
 		}
@@ -4951,13 +5277,13 @@ func runEquivTest(convertedSongs [][]byte, convertedStats []ConversionStats, pla
 				off2 := uint16(idx2 - 1)
 				if idx1 == 0 {
 					cpu.Memory[bufferBase+0x99F+off2] = 0
-					cpu.Memory[bufferBase+0x99F+399+off2] = 0
-					cpu.Memory[bufferBase+0x99F+798+off2] = 0
+					cpu.Memory[bufferBase+0x99F+396+off2] = 0
+					cpu.Memory[bufferBase+0x99F+792+off2] = 0
 				} else {
 					off1 := uint16(idx1 - 1)
 					cpu.Memory[bufferBase+0x99F+off2] = cpu.Memory[bufferBase+0x99F+off1]
-					cpu.Memory[bufferBase+0x99F+399+off2] = cpu.Memory[bufferBase+0x99F+399+off1]
-					cpu.Memory[bufferBase+0x99F+798+off2] = cpu.Memory[bufferBase+0x99F+798+off1]
+					cpu.Memory[bufferBase+0x99F+396+off2] = cpu.Memory[bufferBase+0x99F+396+off1]
+					cpu.Memory[bufferBase+0x99F+792+off2] = cpu.Memory[bufferBase+0x99F+792+off1]
 				}
 
 				if cpu.RunFramesMatch(playerBase+3, testFrames, baseline) {
@@ -4976,6 +5302,9 @@ func runEquivTest(convertedSongs [][]byte, convertedStats []ConversionStats, pla
 	// Generate work items
 	go func() {
 		for songNum := 1; songNum <= 9; songNum++ {
+			if onlySong > 0 && songNum != onlySong {
+				continue
+			}
 			if convertedSongs[songNum-1] == nil {
 				continue
 			}
@@ -5015,5 +5344,5 @@ func rowHexFromData(convertedData []byte, idx int) string {
 	if idx == 0 {
 		return "000000"
 	}
-	return fmt.Sprintf("%02x%02x%02x", convertedData[0x99F+idx-1], convertedData[0x99F+399+idx-1], convertedData[0x99F+798+idx-1])
+	return fmt.Sprintf("%02x%02x%02x", convertedData[0x99F+idx-1], convertedData[0x99F+396+idx-1], convertedData[0x99F+792+idx-1])
 }
