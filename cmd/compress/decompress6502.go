@@ -28,10 +28,10 @@ const (
 // Buffer layout constants for dual-buffer decompression
 //
 // Memory layout:
-//   Buffer 1 (odd songs):  $2000-$3CFF  ($1D00 bytes)
-//   Buffer 2 (even songs): $3D00-$59FF  ($1D00 bytes)
+//   Buffer 1 (odd songs):  $2000-$3BFF  ($1C00 bytes)
+//   Buffer 2 (even songs): $3C00-$57FF  ($1C00 bytes)
 //
-// Buffer length = buffer distance = $1D00 (7424 bytes)
+// Buffer length = buffer distance = $1C00 (7168 bytes)
 //
 // To change buffer addresses:
 //   1. Update these constants
@@ -40,8 +40,8 @@ const (
 //   4. Run: go run ./cmd/compress && make clean && make
 const (
 	DecompBuf1Hi   = 0x20                         // Buffer 1 high byte ($2000)
-	DecompBuf2Hi   = 0x3D                         // Buffer 2 high byte ($3D00)
-	DecompBufSize  = DecompBuf2Hi - DecompBuf1Hi  // Buffer size ($1D00 >> 8 = 7424 bytes)
+	DecompBuf2Hi   = 0x3C                         // Buffer 2 high byte ($3C00)
+	DecompBufSize  = DecompBuf2Hi - DecompBuf1Hi  // Buffer size ($1C00 >> 8 = 7168 bytes)
 	DecompWrapHi   = DecompBuf2Hi + DecompBufSize // Wrap threshold ($5A00)
 	DecompWrapAdj  = DecompWrapHi - DecompBuf1Hi  // Wrap adjustment ($3A)
 )
@@ -403,12 +403,12 @@ func WriteDecompressorAsmWithCycleStats(path string, lowestMaxGapOffset int, max
 ; Minimal: checkpoint: rts
 
 ; Buffer layout (dual-buffer decompression)
-;   Buffer 1 (odd songs):  $%04X-$%04X  ($1D00 bytes)
-;   Buffer 2 (even songs): $%04X-$%04X  ($1D00 bytes)
+;   Buffer 1 (odd songs):  $%04X-$%04X  ($1C00 bytes)
+;   Buffer 2 (even songs): $%04X-$%04X  ($1C00 bytes)
 ; To change: update constants in cmd/compress/decompress6502.go, then rebuild
 DECOMP_BUF1_HI   = $%02X           ; Buffer 1 high byte
 DECOMP_BUF2_HI   = $%02X           ; Buffer 2 high byte
-DECOMP_BUF_SIZE  = $%02X           ; Buffer size ($1D00 >> 8)
+DECOMP_BUF_SIZE  = $%02X           ; Buffer size ($1C00 >> 8)
 DECOMP_WRAP_HI   = $%02X           ; Wrap threshold (buf2 + size)
 
 ; Internal zero page variables
