@@ -1040,7 +1040,7 @@ type PrevSongTables struct {
 	RowDict []byte
 }
 
-func convertToNewFormat(raw []byte, songNum int, prevTables *PrevSongTables, effectRemap [16]byte, fSubRemap map[int]byte, globalWave *GlobalWaveTable, excludeEquiv map[int]bool) ([]byte, ConversionStats, error) {
+func convertToNewFormat(raw []byte, songNum int, prevTables *PrevSongTables, effectRemap [16]byte, fSubRemap map[int]byte, globalWave *GlobalWaveTable, excludeEquiv map[int]bool, instRemap []int, maxUsedSlot int) ([]byte, ConversionStats, error) {
 	var stats ConversionStats
 	// Detect base address from entry point JMP (offset 0: 4c xx yy -> base is $yy00)
 	baseAddr := int(raw[2]) << 8
@@ -1062,6 +1062,7 @@ func convertToNewFormat(raw []byte, songNum int, prevTables *PrevSongTables, eff
 	instSRAddr := readWord(raw, codeInstSR)
 	numInst := int(instSRAddr) - int(instADAddr)
 	srcInstOff := int(instADAddr) - baseAddr
+
 
 	// Extract table offsets from embedded player code
 	wavetableOff := int(readWord(raw, codeWavetable)) - baseAddr
@@ -1559,6 +1560,7 @@ func convertToNewFormat(raw []byte, songNum int, prevTables *PrevSongTables, eff
 	filterPlaced := make([]bool, 234)
 	filterPlaced[0] = true // Position 0 is the sentinel
 	filterRemap := make([]int, numInst)
+
 	for _, sg := range filterSorted {
 		content := []byte(sg.key.content)
 		pos := -1
@@ -1606,6 +1608,7 @@ func convertToNewFormat(raw []byte, songNum int, prevTables *PrevSongTables, eff
 		}
 	}
 
+
 	newWaveSize := len(newWaveTable)
 	if globalWave != nil {
 		newWaveSize = 0 // Wave is global, not per-song
@@ -1618,29 +1621,29 @@ func convertToNewFormat(raw []byte, songNum int, prevTables *PrevSongTables, eff
 
 
 	// Build new format (packed, exact sizes, all tables deduplicated)
-	// $000: Instruments (512 bytes, 32 instruments × 16 params)
-	// $200: Transpose ch0 (256 bytes)
-	// $300: Transpose ch1 (256 bytes)
-	// $400: Transpose ch2 (256 bytes)
-	// $500: Trackptr ch0 (256 bytes)
-	// $600: Trackptr ch1 (256 bytes)
-	// $700: Trackptr ch2 (256 bytes)
-	// $800: Filtertable (234 bytes max deduped)
-	// $8EA: Wavetable (51 bytes max deduped)
-	// $91D: Arptable (188 bytes max deduped)
-	// $9D9: Packed pattern header + dictionary + data
+	// $000: Transpose ch0 (256 bytes)
+	// $100: Transpose ch1 (256 bytes)
+	// $200: Transpose ch2 (256 bytes)
+	// $300: Trackptr ch0 (256 bytes)
+	// $400: Trackptr ch1 (256 bytes)
+	// $500: Trackptr ch2 (256 bytes)
+	// $600: Instruments 1-31 (496 bytes, inst 0 not stored)
+	// $7F0: Filtertable (227 bytes max deduped)
+	// $8D3: Arptable (188 bytes max deduped)
+	// $98F: Row dictionary + packed pattern data
+	// Player uses inst_base = $5F0 (actual - 16) so inst N is at $5F0 + N*16
 
-	newInstOff := 0x000    // Instruments at start
-	transpose0Off := 0x200 // Page-aligned offsets
-	transpose1Off := 0x300
-	transpose2Off := 0x400
-	trackptr0Off := 0x500
-	trackptr1Off := 0x600
-	trackptr2Off := 0x700
-	filterOff := 0x800     // Filter at $800 (227 bytes max)
-	arpOff := 0x8E3        // Arp at $8E3 (188 bytes max)
-	rowDictOff := 0x99F    // Row dict0 (notes), dict1 at +365, dict2 at +730
-	packedPtrsOff := 0xDE6 // Packed pointers (fixed location)
+	transpose0Off := 0x000 // Transpose at start (page-aligned)
+	transpose1Off := 0x100
+	transpose2Off := 0x200
+	trackptr0Off := 0x300
+	trackptr1Off := 0x400
+	trackptr2Off := 0x500
+	newInstOff := 0x600    // Instruments 1-31 start here (inst 0 not stored)
+	filterOff := 0x7F0     // Filter at $7F0 (227 bytes max)
+	arpOff := 0x8D3        // Arp at $8D3 (188 bytes max)
+	rowDictOff := 0x98F    // Row dict0 (notes), dict1 at +365, dict2 at +730
+	packedPtrsOff := 0xDD6 // Packed pointers (fixed location)
 
 	// Extract patterns to slice for packing (do effect/order remapping first)
 	patternData := make([][]byte, numPatterns)
@@ -1650,7 +1653,7 @@ func convertToNewFormat(raw []byte, songNum int, prevTables *PrevSongTables, eff
 		if srcOff >= 0 && srcOff+192 <= len(raw) {
 			copy(pat, raw[srcOff:srcOff+192])
 			remapPatternPositionJumps(pat, orderMap)
-			remapPatternEffects(pat, effectRemap, fSubRemap)
+			remapPatternEffects(pat, effectRemap, fSubRemap, instRemap)
 		}
 		patternData[i] = pat
 	}
@@ -1700,8 +1703,18 @@ func convertToNewFormat(raw []byte, songNum int, prevTables *PrevSongTables, eff
 	}
 
 	// Extract previous row dictionary for cross-song deduplication
+	// Disable if instRemap is non-identity (different songs may have different inst semantics)
+	instRemapIsIdentity := true
+	if instRemap != nil {
+		for i := 1; i < len(instRemap); i++ {
+			if instRemap[i] != i {
+				instRemapIsIdentity = false
+				break
+			}
+		}
+	}
 	var prevDict []byte
-	if !disableCrossSongDedup && prevTables != nil && len(prevTables.RowDict) > 0 {
+	if !disableCrossSongDedup && instRemapIsIdentity && prevTables != nil && len(prevTables.RowDict) > 0 {
 		prevDict = prevTables.RowDict
 	}
 
@@ -1714,7 +1727,7 @@ func convertToNewFormat(raw []byte, songNum int, prevTables *PrevSongTables, eff
 		if srcOff >= 0 && srcOff+192 <= len(raw) {
 			copy(pat, raw[srcOff:srcOff+192])
 			remapPatternPositionJumps(pat, orderMap)
-			remapPatternEffects(pat, effectRemap, fSubRemap)
+			remapPatternEffects(pat, effectRemap, fSubRemap, instRemap)
 		}
 		allPatternData[i] = pat
 	}
@@ -1729,7 +1742,7 @@ func convertToNewFormat(raw []byte, songNum int, prevTables *PrevSongTables, eff
 	// disableEquivSong: 0=apply all, -1=disable all, N=disable song N only
 	var equivMap map[int]int
 	if disableEquivSong == 0 || (disableEquivSong > 0 && songNum != disableEquivSong) {
-		equivMap = optimizeEquivMapMinDict(songNum, dict, patternData, effectRemap, fSubRemap)
+		equivMap = optimizeEquivMapMinDict(songNum, dict, patternData, effectRemap, fSubRemap, instRemap)
 		// Remove excluded mappings
 		if excludeEquiv != nil {
 			for idx := range excludeEquiv {
@@ -1746,6 +1759,13 @@ func convertToNewFormat(raw []byte, songNum int, prevTables *PrevSongTables, eff
 	stats.ExtendedBeforeEquiv = extendedBeforeEquiv
 
 	// Calculate all available gaps for pattern placement
+	// Gap 0: after used instruments, before filter (unused instrument slots)
+	// With MFU packing, used instruments end at slot maxUsedSlot
+	instGapStart := newInstOff + maxUsedSlot*16
+	instGapSize := filterOff - instGapStart
+	if instGapSize < 0 {
+		instGapSize = 0
+	}
 	// Gap 1: after filter, before arp
 	filterGapStart := filterOff + newFilterSize
 	filterGapSize := arpOff - filterGapStart
@@ -1767,13 +1787,14 @@ func convertToNewFormat(raw []byte, songNum int, prevTables *PrevSongTables, eff
 		dictGapSize = 0
 	}
 
-	// Collect all gaps (filter, arp, dict) for pattern placement
+	// Collect all gaps (inst, filter, arp, dict) for pattern placement
 	type gap struct {
 		start int
 		size  int
 		used  int
 	}
 	gaps := []*gap{
+		{instGapStart, instGapSize, 0},
 		{filterGapStart, filterGapSize, 0},
 		{arpGapStart, arpGapSize, 0},
 		{dictGapStart, dictGapSize, 0},
@@ -1921,15 +1942,23 @@ func convertToNewFormat(raw []byte, songNum int, prevTables *PrevSongTables, eff
 		}
 	}
 
-	// Write instruments (interleaved layout: inst N at offset N*16)
+	// Write instruments 1-31 (inst 0 not stored, saves 16 bytes)
+	// Layout: inst 1 at newInstOff, inst 2 at newInstOff+16, etc.
+	// Player uses virtual base = newInstOff - 16 so inst N is at base + N*16
 	// Old format: all AD[0..n], all SR[0..n], all waveStart[0..n], etc.
-	// New format: inst 0 params at $000-$00F, inst 1 at $010-$01F, etc.
+	// New format: inst 1 params at $600-$60F, inst 2 at $610-$61F, etc.
 	// Wave params: 2=start, 3=end, 4=loop; Arp params: 5=start, 6=end, 7=loop
 	// Filter params: 13=start, 14=end, 15=loop
-	for inst := 0; inst < numInst; inst++ {
+	// If instRemap provided, remap instruments: source inst V -> slot instRemap[V]
+	instVirtualBase := newInstOff - 16 // inst 0 would be here if stored
+	for inst := 1; inst < numInst; inst++ {
+		dstInst := inst // default: no remap
+		if instRemap != nil && inst < len(instRemap) && instRemap[inst] > 0 {
+			dstInst = instRemap[inst]
+		}
 		for param := 0; param < 16; param++ {
 			srcIdx := srcInstOff + param*numInst + inst
-			dstIdx := newInstOff + inst*16 + param
+			dstIdx := instVirtualBase + dstInst*16 + param
 			if srcIdx < len(raw) {
 				val := raw[srcIdx]
 				// Remap wave indices (params 2,3,4) using global wavetable
@@ -2004,6 +2033,8 @@ func convertToNewFormat(raw []byte, songNum int, prevTables *PrevSongTables, eff
 	copy(out[filterOff:], newFilterTable)
 	copy(out[arpOff:], newArpTable)
 
+
+
 	// Write pattern packing data
 	// Row dictionary in split format: 3 arrays of 365 bytes each (dict[0] implicit)
 	// dict0 (notes), dict1 (inst|effect), dict2 (params)
@@ -2034,9 +2065,10 @@ func convertToNewFormat(raw []byte, songNum int, prevTables *PrevSongTables, eff
 	return out, stats, nil
 }
 
-// remapRowBytes transforms a single row's bytes using the effect remapping rules.
+// remapRowBytes transforms a single row's bytes using effect and instrument remapping.
 // This is the single source of truth for all row format transformations.
-func remapRowBytes(b0, b1, b2 byte, remap [16]byte, fSubRemap map[int]byte) (byte, byte, byte) {
+// instRemap can be nil to skip instrument remapping.
+func remapRowBytes(b0, b1, b2 byte, remap [16]byte, fSubRemap map[int]byte, instRemap []int) (byte, byte, byte) {
 	oldEffect := (b1 >> 5) | ((b0 >> 4) & 8)
 	var newEffect byte
 	var newParam byte = b2
@@ -2102,7 +2134,17 @@ func remapRowBytes(b0, b1, b2 byte, remap [16]byte, fSubRemap map[int]byte) (byt
 				newParam = loNib
 			case 0xE0:
 				newEffect = fSubRemap[0x12]
-				newParam = loNib << 4
+				// loNib is inst index for filter trigger - remap it
+				// Note: filter trigger can only address inst 0-15 (4-bit field * 16)
+				instIdx := int(loNib)
+				if instRemap != nil && instIdx > 0 && instIdx < len(instRemap) && instRemap[instIdx] > 0 {
+					remapped := instRemap[instIdx]
+					if remapped <= 15 {
+						instIdx = remapped
+					}
+					// If remapped > 15, keep original (will read wrong inst but won't overflow)
+				}
+				newParam = byte(instIdx << 4)
 			case 0x80:
 				newEffect = fSubRemap[0x13]
 				newParam = loNib
@@ -2120,27 +2162,33 @@ func remapRowBytes(b0, b1, b2 byte, remap [16]byte, fSubRemap map[int]byte) (byt
 	}
 
 	newB0 := (b0 & 0x7F) | ((newEffect & 8) << 4)
-	newB1 := (b1 & 0x1F) | ((newEffect & 7) << 5)
+
+	inst := int(b1 & 0x1F)
+	if instRemap != nil && inst > 0 && inst < len(instRemap) && instRemap[inst] > 0 {
+		inst = instRemap[inst]
+	}
+	newB1 := byte(inst&0x1F) | ((newEffect & 7) << 5)
+
 	return newB0, newB1, newParam
 }
 
-// remapPatternEffects remaps effect numbers and parameters in pattern data
-func remapPatternEffects(pattern []byte, remap [16]byte, fSubRemap map[int]byte) {
+// remapPatternEffects remaps effect numbers, parameters, and instruments in pattern data
+func remapPatternEffects(pattern []byte, remap [16]byte, fSubRemap map[int]byte, instRemap []int) {
 	for row := 0; row < 64; row++ {
 		off := row * 3
 		pattern[off], pattern[off+1], pattern[off+2] = remapRowBytes(
-			pattern[off], pattern[off+1], pattern[off+2], remap, fSubRemap)
+			pattern[off], pattern[off+1], pattern[off+2], remap, fSubRemap, instRemap)
 	}
 }
 
 // translateRowHex translates a hex-encoded row from original to converted format
-func translateRowHex(origHex string, remap [16]byte, fSubRemap map[int]byte) string {
+func translateRowHex(origHex string, remap [16]byte, fSubRemap map[int]byte, instRemap []int) string {
 	if len(origHex) != 6 {
 		return origHex
 	}
 	var b0, b1, b2 byte
 	fmt.Sscanf(origHex, "%02x%02x%02x", &b0, &b1, &b2)
-	newB0, newB1, newParam := remapRowBytes(b0, b1, b2, remap, fSubRemap)
+	newB0, newB1, newParam := remapRowBytes(b0, b1, b2, remap, fSubRemap, instRemap)
 	return fmt.Sprintf("%02x%02x%02x", newB0, newB1, newParam)
 }
 
@@ -2171,7 +2219,7 @@ func loadEquivCache() []EquivResult {
 }
 
 // optimizeEquivMapMinDict minimizes dictionary size by mapping rows to already-used targets or idx 0
-func optimizeEquivMapMinDict(songNum int, dict []byte, patterns [][]byte, effectRemap [16]byte, fSubRemap map[int]byte) map[int]int {
+func optimizeEquivMapMinDict(songNum int, dict []byte, patterns [][]byte, effectRemap [16]byte, fSubRemap map[int]byte, instRemap []int) map[int]int {
 	if songNum < 1 || songNum > 9 {
 		return nil
 	}
@@ -2201,10 +2249,10 @@ func optimizeEquivMapMinDict(songNum int, dict []byte, patterns [][]byte, effect
 		if excludedOrig[origSrc] {
 			continue // Skip excluded original mappings
 		}
-		convSrc := translateRowHex(origSrc, effectRemap, fSubRemap)
+		convSrc := translateRowHex(origSrc, effectRemap, fSubRemap, instRemap)
 		var convDsts []string
 		for _, origDst := range origDsts {
-			convDsts = append(convDsts, translateRowHex(origDst, effectRemap, fSubRemap))
+			convDsts = append(convDsts, translateRowHex(origDst, effectRemap, fSubRemap, instRemap))
 		}
 		translatedEquiv[convSrc] = convDsts
 	}
@@ -4013,6 +4061,221 @@ func main() {
 	}
 	fmt.Println()
 
+	// Analyze instrument usage and build remap for packing
+	fmt.Println("\n=== Instrument Analysis ===")
+	type songInstInfo struct {
+		numInst          int
+		usageCounts      []int      // usageCounts[i] = count for pattern inst i+1
+		instData         [][16]byte // instData[i] = 16-byte data for source loop index i
+		filterTriggerUse map[int]bool // instruments used by filter trigger (FEx effect)
+		usedCount        int        // number of instruments actually used
+		maxUsedSlot      int        // highest slot number used after remapping
+	}
+	songInstInfos := make([]songInstInfo, 9)
+
+	for sn := 1; sn <= 9; sn++ {
+		if songData[sn-1] == nil {
+			continue
+		}
+		raw := songData[sn-1]
+		baseAddr := int(raw[2]) << 8
+		instADAddr := readWord(raw, codeInstAD)
+		instSRAddr := readWord(raw, codeInstSR)
+		numInst := int(instSRAddr) - int(instADAddr)
+		srcInstOff := int(instADAddr) - baseAddr
+
+		// Count which instruments are used in patterns
+		trackLo0Off := int(readWord(raw, codeTrackLo0)) - baseAddr
+		trackHi0Off := int(readWord(raw, codeTrackHi0)) - baseAddr
+		trackLo1Off := int(readWord(raw, codeTrackLo1)) - baseAddr
+		trackHi1Off := int(readWord(raw, codeTrackHi1)) - baseAddr
+		trackLo2Off := int(readWord(raw, codeTrackLo2)) - baseAddr
+		trackHi2Off := int(readWord(raw, codeTrackHi2)) - baseAddr
+		trackLoOff := []int{trackLo0Off, trackLo1Off, trackLo2Off}
+		trackHiOff := []int{trackHi0Off, trackHi1Off, trackHi2Off}
+
+		patternAddrs := make(map[uint16]bool)
+		for order := 0; order < 256; order++ {
+			for ch := 0; ch < 3; ch++ {
+				if trackLoOff[ch]+order >= len(raw) || trackHiOff[ch]+order >= len(raw) {
+					continue
+				}
+				lo := raw[trackLoOff[ch]+order]
+				hi := raw[trackHiOff[ch]+order]
+				addr := uint16(lo) | uint16(hi)<<8
+				srcOff := int(addr) - baseAddr
+				if srcOff >= 0 && srcOff+192 <= len(raw) {
+					patternAddrs[addr] = true
+				}
+			}
+		}
+
+		usageCounts := make([]int, numInst)
+		filterTriggerUse := make(map[int]bool)
+		for addr := range patternAddrs {
+			srcOff := int(addr) - baseAddr
+			for row := 0; row < 64; row++ {
+				off := srcOff + row*3
+				byte0 := raw[off]
+				byte1 := raw[off+1]
+				byte2 := raw[off+2]
+				inst := int(byte1 & 0x1F)
+				if inst > 0 && inst < numInst {
+					usageCounts[inst]++
+				}
+				// Track filter trigger usage (effect F, param 0xE0-0xEF)
+				effect := int((byte1 >> 5) | ((byte0 >> 4) & 8))
+				if effect == 0xF && byte2 >= 0xE0 && byte2 < 0xF0 {
+					triggerInst := int(byte2 & 0x0F)
+					if triggerInst > 0 {
+						filterTriggerUse[triggerInst] = true
+					}
+				}
+			}
+		}
+
+		// Extract instrument data (16 bytes each)
+		instData := make([][16]byte, numInst)
+		for i := 0; i < numInst; i++ {
+			for p := 0; p < 16; p++ {
+				idx := srcInstOff + p*numInst + i
+				if idx < len(raw) {
+					instData[i][p] = raw[idx]
+				}
+			}
+		}
+
+		usedCount := 0
+		for i := 1; i < numInst; i++ {
+			if usageCounts[i] > 0 {
+				usedCount++
+			}
+		}
+		songInstInfos[sn-1] = songInstInfo{numInst, usageCounts, instData, filterTriggerUse, usedCount, 0}
+
+		unused := numInst - 1 - usedCount // slot 0 never used
+		fmt.Printf("Song %d: %d/%d instruments used (%d unused = %d bytes)\n",
+			sn, usedCount, numInst-1, unused, unused*16)
+	}
+
+	// Build instRemap for each song: instRemap[oldInst] = newInst (both 1-based pattern values)
+	// Strategy: MFU (most frequently used) at lower indices for contiguous packing
+	instRemaps := make([][]int, 9)
+
+	for sn := 1; sn <= 9; sn++ {
+		info := songInstInfos[sn-1]
+		if info.instData == nil {
+			continue
+		}
+
+		// Get used instruments sorted by frequency (descending)
+		type instFreq struct {
+			idx   int
+			count int
+		}
+		var used []instFreq
+		for i := 1; i < info.numInst; i++ {
+			if info.usageCounts[i] > 0 {
+				used = append(used, instFreq{i, info.usageCounts[i]})
+			}
+		}
+		sort.Slice(used, func(a, b int) bool {
+			if used[a].count != used[b].count {
+				return used[a].count > used[b].count
+			}
+			return used[a].idx < used[b].idx
+		})
+
+		remap := make([]int, info.numInst)
+		slotUsed := make([]bool, info.numInst)
+		slotUsed[0] = true // slot 0 reserved
+
+		// Separate filter trigger instruments (must be slots 1-15) from others
+		var filterTriggerInsts []instFreq
+		var otherInsts []instFreq
+		for _, u := range used {
+			if info.filterTriggerUse[u.idx] {
+				filterTriggerInsts = append(filterTriggerInsts, u)
+			} else {
+				otherInsts = append(otherInsts, u)
+			}
+		}
+		if len(filterTriggerInsts) > 15 {
+			fmt.Printf("WARNING Song %d: %d filter trigger instruments but only slots 1-15 available\n",
+				sn, len(filterTriggerInsts))
+		}
+
+		// Assign filter trigger instruments to slots 1-15
+		nextSlot := 1
+		for _, u := range filterTriggerInsts {
+			if remap[u.idx] != 0 {
+				continue
+			}
+			for slotUsed[nextSlot] {
+				nextSlot++
+			}
+			remap[u.idx] = nextSlot
+			slotUsed[nextSlot] = true
+			nextSlot++
+		}
+
+		// Assign remaining other instruments
+		for _, u := range otherInsts {
+			if remap[u.idx] != 0 {
+				continue
+			}
+			for slotUsed[nextSlot] {
+				nextSlot++
+			}
+			remap[u.idx] = nextSlot
+			slotUsed[nextSlot] = true
+			nextSlot++
+		}
+
+		// Assign unused instruments to remaining slots
+		for i := 1; i < info.numInst; i++ {
+			if remap[i] != 0 {
+				continue
+			}
+			for nextSlot < len(slotUsed) && slotUsed[nextSlot] {
+				nextSlot++
+			}
+			if nextSlot < len(slotUsed) {
+				remap[i] = nextSlot
+				slotUsed[nextSlot] = true
+				nextSlot++
+			} else {
+				remap[i] = nextSlot
+				nextSlot++
+			}
+		}
+
+		// Debug: check for duplicate targets
+		usedSlots := make(map[int]int)
+		for i := 1; i < info.numInst; i++ {
+			if prev, ok := usedSlots[remap[i]]; ok {
+				fmt.Printf("ERROR Song %d: slot %d used by both inst %d and %d\n", sn, remap[i], prev, i)
+			}
+			usedSlots[remap[i]] = i
+		}
+
+		_ = used
+
+		// Calculate maxUsedSlot - highest slot with a used instrument
+		maxUsedSlot := 0
+		for i := 1; i < info.numInst; i++ {
+			if info.usageCounts[i] > 0 && remap[i] > maxUsedSlot {
+				maxUsedSlot = remap[i]
+			}
+		}
+		songInstInfos[sn-1].maxUsedSlot = maxUsedSlot
+
+		instRemaps[sn-1] = remap
+	}
+
+	// Print remap summary
+	fmt.Println("Instrument remap (MFU packing)")
+
 	// Build frequency-sorted effect remapping with new encoding:
 	// - Effect 0: param 0=none, 1=vib(was 4), 2=break(was D), 3=fineslide(was FB)
 	// - Effects 1-E: the 14 variable-param effects sorted by frequency
@@ -4351,7 +4614,7 @@ func main() {
 		if songData[songNum-1] == nil {
 			continue
 		}
-		convertedData, stats, err := convertToNewFormat(songData[songNum-1], songNum, prevTables, effectRemap, fSubRemap, globalWave, nil)
+		convertedData, stats, err := convertToNewFormat(songData[songNum-1], songNum, prevTables, effectRemap, fSubRemap, globalWave, nil, instRemaps[songNum-1], songInstInfos[songNum-1].maxUsedSlot)
 		if err != nil {
 			conversionErrors[songNum] = err.Error()
 			continue
@@ -4832,7 +5095,7 @@ func analyzeSharedRowDict(songData [][]byte, effectRemap [16]byte, fSubRemap map
 			srcOff := int(addr) - baseAddr
 			pat := make([]byte, 192)
 			copy(pat, raw[srcOff:srcOff+192])
-			remapPatternEffects(pat, effectRemap, fSubRemap)
+			remapPatternEffects(pat, effectRemap, fSubRemap, nil)
 			allPats = append(allPats, patternInfo{songNum, pat})
 		}
 	}
@@ -5239,7 +5502,7 @@ func runEquivValidate(songNum int) {
 		globalEquivCache = nil
 
 		// Convert song
-		convData, convStats, err := convertToNewFormat(rawData, songNum, nil, effectRemap, fSubRemap, globalWave, nil)
+		convData, convStats, err := convertToNewFormat(rawData, songNum, nil, effectRemap, fSubRemap, globalWave, nil, nil, 31)
 		if err != nil {
 			return false
 		}

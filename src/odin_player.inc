@@ -25,15 +25,16 @@ zp_dict1         = $1E          ; 2 bytes: dict1 (inst|effect bytes)
 zp_dict2         = $20          ; 2 bytes: dict2 (param bytes)
 
 ; Song format: fixed offsets (all tables deduplicated)
-; $000: Instruments (512 bytes) - 16 bytes each, inst N at offset N*16
-; $200: Transpose ch0-2 (256 bytes each)
-; $500: Trackptr ch0-2 (256 bytes each)
-; $800: Filtertable (227 bytes max)
-; $8E3: Arptable (188 bytes max)
-; $99F: Row dict0 (365 bytes) - note bytes
-; $B0C: Row dict1 (365 bytes) - inst|effect bytes
-; $C79: Row dict2 (365 bytes) - param bytes
-; $DE6: Packed pattern data pointers (dynamic length) - 2 bytes per pattern
+; $000: Transpose ch0-2 (256 bytes each)
+; $300: Trackptr ch0-2 (256 bytes each)
+; $600: Instruments 1-31 (496 bytes) - 16 bytes each, inst 0 not stored
+;       Virtual base is $5F0, so inst N is at $5F0 + N*16
+; $7F0: Filtertable (227 bytes max)
+; $8D3: Arptable (188 bytes max)
+; $98F: Row dict0 (365 bytes) - note bytes
+; $AFC: Row dict1 (365 bytes) - inst|effect bytes
+; $C69: Row dict2 (365 bytes) - param bytes
+; $DD6: Packed pattern data pointers (dynamic length) - 2 bytes per pattern
 ;
 ; Global wavetable (163 bytes) is stored in player, shared across all songs.
 ; Instrument wave indices point directly into global_wavetable.
@@ -69,9 +70,9 @@ zp_dict2         = $20          ; 2 bytes: dict2 (param bytes)
 ;   -> effect = (1<<5>>5) | (($00>>4)&8) = 1 | 0 = 1 (arpeggio $49)
 
 ; Pattern packing constants
-ROW_DICT_OFF        = $99F
+ROW_DICT_OFF        = $98F
 ROW_DICT_SIZE       = 365
-PACKED_PTRS_OFF     = $DE6          ; Pointers are absolute song-base offsets
+PACKED_PTRS_OFF     = $DD6          ; Pointers are absolute song-base offsets
 
 ; Instrument parameter offsets within 16-byte instrument block
 INST_AD          = 0
@@ -96,29 +97,30 @@ INST_FILTLOOP    = 15
 ; ============================================================================
 player_init:
         stx     zp_song_base+1
-        ; Calculate transpose table pages ($200, $300, $400 from base)
-        inx
-        inx                             ; X = base + 2
-        stx     transpose_page+0
-        inx                             ; X = base + 3
+        ; Calculate transpose table pages ($000, $100, $200 from base)
+        stx     transpose_page+0        ; X = base + 0
+        inx                             ; X = base + 1
         stx     transpose_page+1
-        inx                             ; X = base + 4
+        inx                             ; X = base + 2
         stx     transpose_page+2
-        ; Calculate trackptr table pages ($500, $600, $700 from base)
-        inx                             ; X = base + 5
+        ; Calculate trackptr table pages ($300, $400, $500 from base)
+        inx                             ; X = base + 3
         stx     trackptr_page+0
-        inx                             ; X = base + 6
+        inx                             ; X = base + 4
         stx     trackptr_page+1
-        inx                             ; X = base + 7
+        inx                             ; X = base + 5
         stx     trackptr_page+2
         ; Patch table addresses (SMC)
+        inx
+        inx                             ; X = base + 7
+        stx     filter_load+2           ; $7F0 high byte
+        lda     #$f0
+        sta     filter_load+1           ; $7F0 low byte
         inx                             ; X = base + 8
-        stx     filter_load+2           ; $800 high byte
-        stx     arp_load_addr+1         ; $8E3 high byte (same page)
-        lda     #$e3
-        sta     arp_load_addr
+        stx     arp_load_addr+1         ; $8D3 high byte
+        lda     #$d3
+        sta     arp_load_addr           ; $8D3 low byte
         lda     #$00
-        sta     filter_load+1
         sta     zp_song_base
         ; Clear player variables
         ldy     #0
@@ -143,8 +145,11 @@ player_init:
         sta     chn_hardrestart+0
         sta     chn_hardrestart+1
         sta     chn_hardrestart+2
-        ; Initialize inst pointers to instrument 0 (at song_base)
+        ; Initialize inst pointers to instrument 1 (at song_base + $600)
+        ; Inst 0 not stored; virtual base is $5F0 so inst N at $5F0 + N*16
         lda     zp_song_base+1
+        clc
+        adc     #6
         sta     chn_inst_ptr_hi+0
         sta     chn_inst_ptr_hi+1
         sta     chn_inst_ptr_hi+2
@@ -350,15 +355,19 @@ player_play:
         and     #$1f
         beq     @fcr_checknote
         sta     chn_inst,x
+        ; Inst 0 not stored, so inst N is at $600 + (N-1)*16
+        sec
+        sbc     #1                      ; A = inst - 1
         asl
         asl
         asl
-        asl
+        asl                             ; A = (inst-1)*16, C = (inst >= 17)
         sta     zp_ptr
         sta     chn_inst_ptr_lo,x
         lda     #0
-        rol
+        rol                             ; A = (inst >= 17) ? 1 : 0
         adc     zp_song_base+1
+        adc     #6                      ; + $600 base
         sta     zp_ptr+1
         sta     chn_inst_ptr_hi,x
         jsr     checkpoint
@@ -612,12 +621,16 @@ fx_haseffect:
         jmp     do_slide_vib
 @fx_5:
         ; Effect 5 = filter trigger (inlined, param pre-shifted *16)
+        ; Inst 0 not stored, virtual base is $5F0
         lda     speedcounter
         bne     @fx_exit2
         lda     chn_effectpar,x
         beq     @fx_exit2
+        clc
+        adc     #$F0                    ; + virtual base lo
         sta     zp_ptr
         lda     zp_song_base+1
+        adc     #5                      ; + virtual base hi + carry
         sta     zp_ptr+1
         ldy     #INST_FILTSTART
         lda     (zp_ptr),y
