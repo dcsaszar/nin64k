@@ -16,7 +16,6 @@ import (
 
 var projectRoot string
 var disableEquivSong int
-var disableCrossSongDedup bool
 
 func init() {
 	projectRoot = findProjectRoot()
@@ -1033,14 +1032,7 @@ type ConversionStats struct {
 	ExtendedBeforeEquiv int
 }
 
-// PrevSongTables holds table data from previous song for cross-song deduplication
-type PrevSongTables struct {
-	Arp     []byte
-	Filter  []byte
-	RowDict []byte
-}
-
-func convertToNewFormat(raw []byte, songNum int, prevTables *PrevSongTables, effectRemap [16]byte, fSubRemap map[int]byte, globalWave *GlobalWaveTable, excludeEquiv map[int]bool, instRemap []int, maxUsedSlot int) ([]byte, ConversionStats, error) {
+func convertToNewFormat(raw []byte, songNum int, effectRemap [16]byte, fSubRemap map[int]byte, globalWave *GlobalWaveTable, excludeEquiv map[int]bool, instRemap []int, maxUsedSlot int) ([]byte, ConversionStats, error) {
 	var stats ConversionStats
 	// Detect base address from entry point JMP (offset 0: 4c xx yy -> base is $yy00)
 	baseAddr := int(raw[2]) << 8
@@ -1405,37 +1397,17 @@ func convertToNewFormat(raw []byte, songNum int, prevTables *PrevSongTables, eff
 	for key, insts := range arpGroups {
 		arpSorted = append(arpSorted, sortedGroup{key, insts})
 	}
-	// Helper to apply arp remapping for comparison
-	remapArpContent := func(content []byte) []byte {
-		result := make([]byte, len(content))
-		copy(result, content)
-		for i := range result {
-			if result[i] == 0xFF {
-				result[i] = 0xE7
-			}
-		}
-		return result
-	}
-	// Sort: shared content first, then by size desc
+	// Sort by size desc
 	for i := 0; i < len(arpSorted)-1; i++ {
 		for j := i + 1; j < len(arpSorted); j++ {
-			iContent := remapArpContent([]byte(arpSorted[i].key.content))
-			jContent := remapArpContent([]byte(arpSorted[j].key.content))
-			iInPrev := prevTables != nil && len(prevTables.Arp) > 0 && findInTable(prevTables.Arp, iContent) >= 0
-			jInPrev := prevTables != nil && len(prevTables.Arp) > 0 && findInTable(prevTables.Arp, jContent) >= 0
-			if jInPrev && !iInPrev {
+			li, lj := len(arpSorted[i].key.content), len(arpSorted[j].key.content)
+			if lj > li || (lj == li && arpSorted[j].key.content < arpSorted[i].key.content) {
 				arpSorted[i], arpSorted[j] = arpSorted[j], arpSorted[i]
-			} else if iInPrev == jInPrev {
-				li, lj := len(arpSorted[i].key.content), len(arpSorted[j].key.content)
-				if lj > li || (lj == li && arpSorted[j].key.content < arpSorted[i].key.content) {
-					arpSorted[i], arpSorted[j] = arpSorted[j], arpSorted[i]
-				}
 			}
 		}
 	}
 
 	var newArpTable []byte
-	arpPlaced := make([]bool, 188)
 	arpRemap := make([]int, numInst)
 	for _, sg := range arpSorted {
 		content := []byte(sg.key.content)
@@ -1445,45 +1417,10 @@ func convertToNewFormat(raw []byte, songNum int, prevTables *PrevSongTables, eff
 				content[i] = 0xE7 // $80 | 103
 			}
 		}
-		pos := -1
-		// First, check if this content exists in previous song's table
-		if prevTables != nil && len(prevTables.Arp) > 0 {
-			prevPos := findInTable(prevTables.Arp, content)
-			if prevPos >= 0 {
-				endPos := prevPos + len(content)
-				// Only allow cross-song placement if it fits and doesn't create gaps
-				if endPos <= 188 && prevPos <= len(newArpTable) {
-					canPlace := true
-					for i := 0; i < len(content); i++ {
-						if arpPlaced[prevPos+i] && newArpTable[prevPos+i] != content[i] {
-							canPlace = false
-							break
-						}
-					}
-					if canPlace {
-						for len(newArpTable) < endPos {
-							newArpTable = append(newArpTable, 0)
-						}
-						copy(newArpTable[prevPos:], content)
-						for i := 0; i < len(content); i++ {
-							arpPlaced[prevPos+i] = true
-						}
-						pos = prevPos
-					}
-				}
-			}
-		}
+		pos := findInTable(newArpTable, content)
 		if pos < 0 {
-			pos = findInTable(newArpTable, content)
-			if pos < 0 {
-				pos = len(newArpTable)
-				newArpTable = append(newArpTable, content...)
-			}
-			for i := 0; i < len(content); i++ {
-				if pos+i < len(arpPlaced) {
-					arpPlaced[pos+i] = true
-				}
-			}
+			pos = len(newArpTable)
+			newArpTable = append(newArpTable, content...)
 		}
 		for _, inst := range sg.insts {
 			arpRemap[inst] = pos - arpFullRanges[inst].min
@@ -1539,69 +1476,26 @@ func convertToNewFormat(raw []byte, songNum int, prevTables *PrevSongTables, eff
 	for key, insts := range filterGroups {
 		filterSorted = append(filterSorted, sortedGroup{key, insts})
 	}
-	// Sort: shared content first, then by size desc
+	// Sort by size desc
 	for i := 0; i < len(filterSorted)-1; i++ {
 		for j := i + 1; j < len(filterSorted); j++ {
-			iInPrev := prevTables != nil && len(prevTables.Filter) > 0 && findInTable(prevTables.Filter, []byte(filterSorted[i].key.content)) >= 0
-			jInPrev := prevTables != nil && len(prevTables.Filter) > 0 && findInTable(prevTables.Filter, []byte(filterSorted[j].key.content)) >= 0
-			if jInPrev && !iInPrev {
+			li, lj := len(filterSorted[i].key.content), len(filterSorted[j].key.content)
+			if lj > li || (lj == li && filterSorted[j].key.content < filterSorted[i].key.content) {
 				filterSorted[i], filterSorted[j] = filterSorted[j], filterSorted[i]
-			} else if iInPrev == jInPrev {
-				li, lj := len(filterSorted[i].key.content), len(filterSorted[j].key.content)
-				if lj > li || (lj == li && filterSorted[j].key.content < filterSorted[i].key.content) {
-					filterSorted[i], filterSorted[j] = filterSorted[j], filterSorted[i]
-				}
 			}
 		}
 	}
 
 	// Start filter table at position 1 (position 0 reserved for "no filter" sentinel)
 	newFilterTable := []byte{0}
-	filterPlaced := make([]bool, 234)
-	filterPlaced[0] = true // Position 0 is the sentinel
 	filterRemap := make([]int, numInst)
 
 	for _, sg := range filterSorted {
 		content := []byte(sg.key.content)
-		pos := -1
-		// First, check if this content exists in previous song's table
-		if prevTables != nil && len(prevTables.Filter) > 0 {
-			prevPos := findInTable(prevTables.Filter, content)
-			if prevPos >= 0 {
-				endPos := prevPos + len(content)
-				// Only allow cross-song placement if it fits and doesn't create gaps
-				if endPos <= 234 && prevPos <= len(newFilterTable) {
-					canPlace := true
-					for i := 0; i < len(content); i++ {
-						if filterPlaced[prevPos+i] && newFilterTable[prevPos+i] != content[i] {
-							canPlace = false
-							break
-						}
-					}
-					if canPlace {
-						for len(newFilterTable) < endPos {
-							newFilterTable = append(newFilterTable, 0)
-						}
-						copy(newFilterTable[prevPos:], content)
-						for i := 0; i < len(content); i++ {
-							filterPlaced[prevPos+i] = true
-						}
-						pos = prevPos
-					}
-				}
-			}
-		}
+		pos := findInTable(newFilterTable, content)
 		if pos < 0 {
-			pos = findInTable(newFilterTable, content)
-			if pos < 0 {
-				pos = len(newFilterTable)
-				newFilterTable = append(newFilterTable, content...)
-			}
-			for i := 0; i < len(content); i++ {
-				if pos+i < len(filterPlaced) {
-					filterPlaced[pos+i] = true
-				}
-			}
+			pos = len(newFilterTable)
+			newFilterTable = append(newFilterTable, content...)
 		}
 		for _, inst := range sg.insts {
 			filterRemap[inst] = pos - filterFullRanges[inst].min
@@ -1702,22 +1596,6 @@ func convertToNewFormat(raw []byte, songNum int, prevTables *PrevSongTables, eff
 		}
 	}
 
-	// Extract previous row dictionary for cross-song deduplication
-	// Disable if instRemap is non-identity (different songs may have different inst semantics)
-	instRemapIsIdentity := true
-	if instRemap != nil {
-		for i := 1; i < len(instRemap); i++ {
-			if instRemap[i] != i {
-				instRemapIsIdentity = false
-				break
-			}
-		}
-	}
-	var prevDict []byte
-	if !disableCrossSongDedup && instRemapIsIdentity && prevTables != nil && len(prevTables.RowDict) > 0 {
-		prevDict = prevTables.RowDict
-	}
-
 	// Build dictionary from ALL patterns (including non-canonical transpose equivalents)
 	// This ensures rows from transpose-equivalent patterns are available for other patterns that share them
 	allPatternData := make([][]byte, len(sortedPatternAddrs))
@@ -1752,7 +1630,7 @@ func convertToNewFormat(raw []byte, songNum int, prevTables *PrevSongTables, eff
 	}
 
 	// Pack patterns with optimized equiv map
-	dict, packed, patOffsets, primaryCount, extendedCount, extendedBeforeEquiv, individualPacked := packPatternsWithEquiv(patternData, dict, equivMap, prevDict, patternTruncate)
+	dict, packed, patOffsets, primaryCount, extendedCount, extendedBeforeEquiv, individualPacked := packPatternsWithEquiv(patternData, dict, equivMap, patternTruncate)
 
 	stats.PrimaryIndices = primaryCount
 	stats.ExtendedIndices = extendedCount
@@ -2287,7 +2165,6 @@ func optimizeEquivMapMinDict(songNum int, dict []byte, patterns [][]byte, effect
 		}
 	}
 
-	// Build equiv options (Song 2 restricted to extended rows only due to bad equiv entry)
 	const primaryMax = 225
 	type equivRow struct {
 		idx     int
@@ -2494,8 +2371,7 @@ func buildPatternDict(patterns [][]byte, prevDict []byte) (dict []byte, rowToIdx
 
 // packPatternsWithEquiv packs pattern data, using equivalences to reduce extended indices
 // truncateLimits provides cross-channel truncation limits (max reachable row+1 for each pattern)
-// Returns compressed dict (unused entries removed after equiv, reordered to match prevDict)
-func packPatternsWithEquiv(patterns [][]byte, inputDict []byte, equivMap map[int]int, prevDict []byte, truncateLimits []int) (dict []byte, packed []byte, offsets []uint16, primaryCount int, extendedCount int, extendedBeforeEquiv int, individualPacked [][]byte) {
+func packPatternsWithEquiv(patterns [][]byte, inputDict []byte, equivMap map[int]int, truncateLimits []int) (dict []byte, packed []byte, offsets []uint16, primaryCount int, extendedCount int, extendedBeforeEquiv int, individualPacked [][]byte) {
 	// Use provided dict (already built from all patterns including transpose equivalents)
 	fullDict := inputDict
 	numFullEntries := len(fullDict) / 3
@@ -2569,58 +2445,20 @@ func packPatternsWithEquiv(patterns [][]byte, inputDict []byte, equivMap map[int
 		}
 	}
 
-	// Build prevDict row->position map for cross-song matching
-	prevRowToPos := make(map[[3]byte]int)
-	if prevDict != nil {
-		numPrevEntries := len(prevDict) / 3
-		for i := 1; i < numPrevEntries; i++ {
-			var row [3]byte
-			copy(row[:], prevDict[i*3:i*3+3])
-			if row != [3]byte{} { // skip zero rows
-				prevRowToPos[row] = i
-			}
-		}
-	}
+	// Sort by frequency (descending) and assign final positions
+	sort.Slice(compactedEntries, func(i, j int) bool {
+		return idxUsageCount[compactedEntries[i].oldIdx] > idxUsageCount[compactedEntries[j].oldIdx]
+	})
 
-	// Assign final positions: prev-matching first, then freq-sort remaining
 	finalDict := make([]byte, (numCompacted+1)*3)
-	placed := make([]bool, numCompacted+1)
-	placed[0] = true // dict[0] is implicit
 	oldToNew := make(map[int]int)
 	oldToNew[0] = 0
 
-	// First pass: place entries at matching prevDict positions
-	remaining := make([]int, 0)
-	for i := range compactedEntries {
-		if prevPos, ok := prevRowToPos[compactedEntries[i].row]; ok && prevPos > 0 && prevPos <= numCompacted && !placed[prevPos] {
-			compactedEntries[i].finalIdx = prevPos
-			placed[prevPos] = true
-			copy(finalDict[prevPos*3:], compactedEntries[i].row[:])
-			oldToNew[compactedEntries[i].oldIdx] = prevPos
-		} else {
-			remaining = append(remaining, i)
-		}
-	}
-
-	// Second pass: sort remaining by frequency (descending), fill lowest slots first
-	sort.Slice(remaining, func(i, j int) bool {
-		iIdx := compactedEntries[remaining[i]].oldIdx
-		jIdx := compactedEntries[remaining[j]].oldIdx
-		return idxUsageCount[iIdx] > idxUsageCount[jIdx]
-	})
-
-	nextSlot := 1
-	for _, i := range remaining {
-		for nextSlot <= numCompacted && placed[nextSlot] {
-			nextSlot++
-		}
-		if nextSlot <= numCompacted {
-			compactedEntries[i].finalIdx = nextSlot
-			placed[nextSlot] = true
-			copy(finalDict[nextSlot*3:], compactedEntries[i].row[:])
-			oldToNew[compactedEntries[i].oldIdx] = nextSlot
-			nextSlot++
-		}
+	for i, entry := range compactedEntries {
+		slot := i + 1
+		compactedEntries[i].finalIdx = slot
+		copy(finalDict[slot*3:], entry.row[:])
+		oldToNew[entry.oldIdx] = slot
 	}
 
 	dict = finalDict
@@ -4604,45 +4442,21 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Convert all songs with cross-song table deduplication
-	// Each song's tables are passed to the next song for dedup
+	// Convert all songs
 	convertedSongs := make([][]byte, 9)
 	convertedStats := make([]ConversionStats, 9)
 	conversionErrors := make(map[int]string)
-	var prevTables *PrevSongTables
 	for songNum := 1; songNum <= 9; songNum++ {
 		if songData[songNum-1] == nil {
 			continue
 		}
-		convertedData, stats, err := convertToNewFormat(songData[songNum-1], songNum, prevTables, effectRemap, fSubRemap, globalWave, nil, instRemaps[songNum-1], songInstInfos[songNum-1].maxUsedSlot)
+		convertedData, stats, err := convertToNewFormat(songData[songNum-1], songNum, effectRemap, fSubRemap, globalWave, nil, instRemaps[songNum-1], songInstInfos[songNum-1].maxUsedSlot)
 		if err != nil {
 			conversionErrors[songNum] = err.Error()
 			continue
 		}
 		convertedSongs[songNum-1] = convertedData
 		convertedStats[songNum-1] = stats
-
-		// Extract tables for next song's dedup
-		const (
-			filterOff  = 0x800
-			arpOff     = 0x8E3
-			rowDictOff = 0x99F
-		)
-		// Read split dict back into interleaved format for dedup comparison
-		// dict[0] is implicit [0,0,0] (not stored), dict[1] starts at file offset 0
-		numEntries := stats.PatternDictSize
-		prevDict := make([]byte, numEntries*3)
-		// dict[0] = [0,0,0] (implicit, already zero in fresh slice)
-		for i := 1; i < numEntries; i++ {
-			prevDict[i*3] = convertedData[rowDictOff+i-1]       // note (dict[i] at file offset i-1)
-			prevDict[i*3+1] = convertedData[rowDictOff+365+i-1] // inst|effect
-			prevDict[i*3+2] = convertedData[rowDictOff+730+i-1] // param
-		}
-		prevTables = &PrevSongTables{
-			Arp:     append([]byte{}, convertedData[arpOff:arpOff+stats.NewArpSize]...),
-			Filter:  append([]byte{}, convertedData[filterOff:filterOff+stats.NewFilterSize]...),
-			RowDict: prevDict,
-		}
 	}
 
 	// Write converted parts to generated/parts directory
@@ -5502,7 +5316,7 @@ func runEquivValidate(songNum int) {
 		globalEquivCache = nil
 
 		// Convert song
-		convData, convStats, err := convertToNewFormat(rawData, songNum, nil, effectRemap, fSubRemap, globalWave, nil, nil, 31)
+		convData, convStats, err := convertToNewFormat(rawData, songNum, effectRemap, fSubRemap, globalWave, nil, nil, 31)
 		if err != nil {
 			return false
 		}
