@@ -146,7 +146,7 @@ read_expgol:
         sty     zp_val_hi
 count_zeros:
         dex
-        cpx     #$F4
+        cpx     #$F6
         beq     terminator
         jsr     read_bit
         bcc     count_zeros

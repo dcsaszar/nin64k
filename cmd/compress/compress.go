@@ -556,11 +556,10 @@ func compress(target, selfDict, otherDict []byte) ([]byte, int, compressStats) {
 		}
 	}
 
-	// Emit terminator: backref0 prefix (10) + 12 zeros (14 bits total)
-	// Data uses at most 11 zeros, so 12 zeros triggers early exit.
-	// Decoder checks for 12+ zeros BEFORE reading another bit, so no trailing 1 needed.
-	writeBits(0b10, 2) // backref0 prefix
-	writeBits(0, 12)   // 12 zeros (terminator signal)
+	// Emit terminator: backref0 prefix (10) + TerminatorZeros zeros
+	// Decoder checks for TerminatorZeros+ zeros BEFORE reading another bit, so no trailing 1 needed.
+	writeBits(0b10, 2)             // backref0 prefix
+	writeBits(0, TerminatorZeros) // terminator signal
 
 	// Record bit count before padding
 	totalBits := bitPos
@@ -641,7 +640,7 @@ func decompress(compressed, selfDict, otherDict []byte, expectedLen int) []byte 
 		} else if reader.readBit() == 0 {
 			// Backref0 (10): dist % 3 == 0
 			d := reader.readExpGolomb(kDist)
-			// Terminator: d with 12+ leading zeros in gamma (d >= 16380)
+			// Terminator: d with TerminatorZeros+ leading zeros in gamma
 			if d >= 16380 {
 				break
 			}

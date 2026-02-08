@@ -50,8 +50,8 @@ const (
 // X counts down from 1: after N zeros, X = 1-(N+1) = -N (mod 256)
 // Threshold = 256 - terminatorZeros detects exactly terminatorZeros consecutive zeros
 const (
-	TerminatorZeros     = 12   // number of zero bits that signal terminator
-	terminatorThreshold = 256 - TerminatorZeros // $F4 for 12 zeros
+	TerminatorZeros     = 10   // number of zero bits that signal terminator
+	terminatorThreshold = 256 - TerminatorZeros // $F6 for 10 zeros
 )
 
 // zpName returns the symbolic name for a zero page address
