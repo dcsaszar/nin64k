@@ -1702,8 +1702,8 @@ func convertToNewFormat(raw []byte, songNum int, effectRemap [16]byte, fSubRemap
 	patternTruncate = canonTruncate
 	numPatterns = len(patternData)
 
-	// Pack patterns with optimized equiv map
-	dict, packed, patOffsets, primaryCount, extendedCount, extendedBeforeEquiv, individualPacked := packPatternsWithEquiv(patternData, dict, equivMap, patternTruncate)
+	// Pack patterns with optimized equiv map and gap encoding
+	dict, packed, patOffsets, patGapCodes, primaryCount, extendedCount, extendedBeforeEquiv, individualPacked := packPatternsWithEquiv(patternData, dict, equivMap, patternTruncate)
 
 	stats.PrimaryIndices = primaryCount
 	stats.ExtendedIndices = extendedCount
@@ -1996,10 +1996,15 @@ func convertToNewFormat(raw []byte, songNum int, effectRemap [16]byte, fSubRemap
 		out[rowDictOff+365+i-1] = dict[i*3+1]   // inst|effect
 		out[rowDictOff+730+i-1] = dict[i*3+2]   // param
 	}
-	// Packed pointers (absolute song-base offsets, already computed)
+	// Packed pointers (absolute song-base offsets with gap code in high bits)
+	// Bits 0-12: offset (13 bits = 8KB max), bits 13-15: gap code (0-6)
+	// Gap code N means implicit zeros: 0,1,3,7,15,31,63 (2^N - 1 for N>0)
 	for i, pOff := range patOffsets {
+		if pOff > 0x1FFF {
+			panic(fmt.Sprintf("pattern offset %d exceeds 13-bit max", pOff))
+		}
 		out[packedPtrsOff+i*2] = byte(pOff & 0xFF)
-		out[packedPtrsOff+i*2+1] = byte(pOff >> 8)
+		out[packedPtrsOff+i*2+1] = byte(pOff>>8) | (patGapCodes[i] << 5)
 	}
 	// Write gap patterns
 	for i, gapOff := range inGap {
@@ -2442,9 +2447,52 @@ func buildPatternDict(patterns [][]byte, prevDict []byte) (dict []byte, rowToIdx
 	return dict, rowToIdx
 }
 
+// gapCodeToValue maps gap codes (0-6) to actual gap values (0,1,3,7,15,31,63)
+var gapCodeToValue = []int{0, 1, 3, 7, 15, 31, 63}
+
+// calculatePatternGap finds the best (largest) gap code for a pattern
+// Returns gap code 0-6 where code N means gap = 2^N - 1 (except 0 means no gap)
+func calculatePatternGap(pat []byte, truncateAfter int) int {
+	numRows := len(pat) / 3
+	if truncateAfter <= 0 || truncateAfter > numRows {
+		truncateAfter = numRows
+	}
+
+	// Try gaps from largest to smallest (codes 6 down to 1)
+	// Gap code 0 = no implicit zeros
+	for code := 6; code >= 1; code-- {
+		gap := gapCodeToValue[code]
+		spacing := gap + 1
+		if 64%spacing != 0 {
+			continue
+		}
+		numSlots := 64 / spacing
+		matches := true
+		for slot := 0; slot < numSlots && matches; slot++ {
+			startRow := slot * spacing
+			// Check that rows startRow+1 through startRow+gap are all zero
+			for zeroIdx := 1; zeroIdx <= gap && matches; zeroIdx++ {
+				rowNum := startRow + zeroIdx
+				if rowNum >= truncateAfter {
+					break // Beyond truncation point
+				}
+				off := rowNum * 3
+				if pat[off] != 0 || pat[off+1] != 0 || pat[off+2] != 0 {
+					matches = false
+				}
+			}
+		}
+		if matches {
+			return code
+		}
+	}
+	return 0 // No gap encoding
+}
+
 // packPatternsWithEquiv packs pattern data, using equivalences to reduce extended indices
 // truncateLimits provides cross-channel truncation limits (max reachable row+1 for each pattern)
-func packPatternsWithEquiv(patterns [][]byte, inputDict []byte, equivMap map[int]int, truncateLimits []int) (dict []byte, packed []byte, offsets []uint16, primaryCount int, extendedCount int, extendedBeforeEquiv int, individualPacked [][]byte) {
+// Returns gapCodes slice with gap code (0-6) for each pattern to store in pointer high nibble
+func packPatternsWithEquiv(patterns [][]byte, inputDict []byte, equivMap map[int]int, truncateLimits []int) (dict []byte, packed []byte, offsets []uint16, gapCodes []byte, primaryCount int, extendedCount int, extendedBeforeEquiv int, individualPacked [][]byte) {
 	// Use provided dict (already built from all patterns including transpose equivalents)
 	fullDict := inputDict
 	numFullEntries := len(fullDict) / 3
@@ -2457,12 +2505,12 @@ func packPatternsWithEquiv(patterns [][]byte, inputDict []byte, equivMap map[int
 		rowToIdx[row] = idx
 	}
 
-	const primaryMax = 225
+	const primaryMax = 224
 	const rleMax = 16
 	const rleBase = 0xEF
 	const extMarker = 0xFF
-	const dictZeroRleMax = 14
-	const dictOffsetBase = 0x0F
+	const dictZeroRleMax = 15
+	const dictOffsetBase = 0x10
 
 	// First pass: collect which dict indices are actually used after equiv AND count usage
 	usedIdx := make(map[int]bool)
@@ -2536,19 +2584,28 @@ func packPatternsWithEquiv(patterns [][]byte, inputDict []byte, equivMap map[int
 
 	dict = finalDict
 
-	// Second pass: pack patterns using remapped indices
+	// Second pass: calculate gap codes and pack patterns
 	patternPacked := make([][]byte, len(patterns))
+	gapCodes = make([]byte, len(patterns))
+
 	for i, pat := range patterns {
-		var patPacked []byte
-		var prevRow [3]byte
-		repeatCount := 0
 		numRows := len(pat) / 3
-		lastWasDictZero := false
-		lastDictZeroPos := -1
 		truncateAfter := numRows
 		if truncateLimits != nil && i < len(truncateLimits) && truncateLimits[i] > 0 && truncateLimits[i] < truncateAfter {
 			truncateAfter = truncateLimits[i]
 		}
+
+		// Calculate best gap code for this pattern
+		gapCode := calculatePatternGap(pat, truncateAfter)
+		gapCodes[i] = byte(gapCode)
+		gap := gapCodeToValue[gapCode]
+		spacing := gap + 1
+
+		var patPacked []byte
+		var prevRow [3]byte
+		repeatCount := 0
+		lastWasDictZero := false
+		lastDictZeroPos := -1
 
 		emitRLE := func() {
 			if repeatCount == 0 {
@@ -2573,7 +2630,10 @@ func packPatternsWithEquiv(patterns [][]byte, inputDict []byte, equivMap map[int
 			repeatCount = 0
 		}
 
-		for row := 0; row < truncateAfter; row++ {
+		// Only encode rows at positions 0, spacing, 2*spacing, etc.
+		// The implicit zeros at positions 1..gap, spacing+1..spacing+gap, etc. are skipped
+		for slot := 0; slot*spacing < truncateAfter; slot++ {
+			row := slot * spacing
 			off := row * 3
 			curRow := [3]byte{pat[off], pat[off+1], pat[off+2]}
 
@@ -2583,7 +2643,7 @@ func packPatternsWithEquiv(patterns [][]byte, inputDict []byte, equivMap map[int
 				if lastWasDictZero && lastDictZeroPos >= 0 {
 					maxAllowed = dictZeroRleMax
 				}
-				if repeatCount == maxAllowed || row == truncateAfter-1 {
+				if repeatCount == maxAllowed || (slot+1)*spacing >= truncateAfter {
 					emitRLE()
 				}
 			} else {
@@ -2623,7 +2683,7 @@ func packPatternsWithEquiv(patterns [][]byte, inputDict []byte, equivMap map[int
 
 	packed, offsets = optimizePackedOverlap(patternPacked)
 
-	return dict, packed, offsets, primaryCount, extendedCount, extendedBeforeEquiv, patternPacked
+	return dict, packed, offsets, gapCodes, primaryCount, extendedCount, extendedBeforeEquiv, patternPacked
 }
 
 // optimizePackedOverlap uses greedy superstring algorithm to find optimal overlapping

@@ -19,6 +19,7 @@ zp_song_base     = $10          ; 2 bytes: base address of current song data
 zp_ptr           = $12          ; 2 bytes: temp pointer / temp values
 zp_trackptr      = $14          ; 2 bytes: track pointer
 zp_dict0         = $16          ; 2 bytes: dict0 (note bytes)
+zp_is_gap_zero   = $18          ; 1 byte: non-zero if current row is gap zero
 zp_temp0         = $1A          ; 2 bytes: temp (decode src / instrument processing)
 zp_temp1         = $1C          ; 2 bytes: temp (decode dst)
 zp_dict1         = $1E          ; 2 bytes: dict1 (inst|effect bytes)
@@ -44,8 +45,8 @@ zp_dict2         = $20          ; 2 bytes: dict2 (param bytes)
 ;     dict[0] is implicit (always [0,0,0]), not stored - dict starts at index 1
 ;   Packed pointers: 2-byte offset into packed data for each pattern
 ;   Packed data encoding:
-;     $00-$0E: dict[0] with RLE 0-14 (1 byte encodes 1-15 rows of [0,0,0])
-;     $0F-$EE: dictionary index 1-224 (subtract $0E to get actual index)
+;     $00-$0F: dict[0] with RLE 0-15 (1 byte encodes 1-16 rows of [0,0,0])
+;     $10-$EE: dictionary index 1-223 (subtract $0F to get actual index)
 ;     $EF-$FE: RLE repeat previous row 1-16 times
 ;     $FF + byte: extended dictionary index (225 + byte)
 ;   Each pattern decodes to 64 rows × 3 bytes = 192 bytes
@@ -123,15 +124,16 @@ player_init:
         lda     #$00
         sta     zp_song_base
         ; Clear player variables
-        ldy     #0
+.assert (PLAYERVARSSIZE & 1) = 0, error, "PLAYERVARSSIZE must be even for optimized clearing"
+        ldy     #PLAYERVARSSIZE-1
 @clear:
         lda     #$00
         sta     chn_hardrestart,y
-        iny
-        cpy     #PLAYERVARSSIZE
-        beq     @clear_done
+        dey
+        sta     chn_hardrestart,y
         jsr     checkpoint
-        jmp     @clear
+        dey
+        bpl     @clear
 @clear_done:
 
         ; Initialize playback state (always start at order 0)
@@ -1054,7 +1056,9 @@ gto_channel:
         bne     gto_need_decode
         lda     decode_row
         cmp     chn_decoded_row,x
-        beq     gto_already_decoded
+        bne     @not_already_decoded
+        jmp     gto_already_decoded
+@not_already_decoded:
         ; Same pattern, different row - check if sequential
         lda     chn_decoded_row,x
         clc
@@ -1066,10 +1070,28 @@ gto_need_decode:
         jsr     checkpoint
         lda     (zp_ptr),y          ; re-read pattern index
         sta     chn_decoded_pat,x
+        ; Load gap code from packed pointer bits 13-15
+        asl     a                   ; pattern index * 2
+        tay
+        lda     packed_ptrs_addr
+        sta     zp_temp0
+        lda     packed_ptrs_addr+1
+        sta     zp_temp0+1
+        iny                         ; point to high byte
+        lda     (zp_temp0),y        ; ptr hi: bits 0-4=offset, bits 5-7=gap code
+        lsr     a
+        lsr     a
+        lsr     a
+        lsr     a
+        lsr     a                   ; gap code now in bits 0-2 (0-6)
+        tay
+        lda     gap_code_table,y    ; look up gap value
+        sta     chn_gap,x
         ; Reset decoder state
         lda     #0
         sta     chn_src_off,x
         sta     chn_rle_count,x
+        sta     chn_gap_remaining,x
         sta     chn_prev_row_0,x
         sta     chn_prev_row_1,x
         sta     chn_prev_row_2,x
@@ -1086,15 +1108,28 @@ gto_skip_loop:
         jmp     gto_skip_loop
 gto_advance_one:
         ; Sequential advance - decode one more row
-        jsr     checkpoint
         jsr     decode_advance_row
         jsr     checkpoint
 gto_store_to_buffer:
-        ; Copy current row (prev_row) to decode buffer
+        ; Set up decode buffer pointer (common to both paths)
         lda     decode_buffer_lo,x
         sta     zp_temp1
         lda     decode_buffer_hi,x
         sta     zp_temp1+1
+        ; Check if this is a gap zero (zp_is_gap_zero set by decode_advance_row)
+        lda     zp_is_gap_zero
+        beq     @copy_prev_row
+        ; Gap zero: output zeros (unrolled for speed)
+        lda     #0
+        ldy     #0
+        sta     (zp_temp1),y
+        iny
+        sta     (zp_temp1),y
+        iny
+        sta     (zp_temp1),y
+        bne     @store_done             ; always taken (Y=2)
+@copy_prev_row:
+        ; Normal row: copy prev_row to decode buffer
         ldy     #0
         lda     chn_prev_row_0,x
         sta     (zp_temp1),y
@@ -1104,10 +1139,12 @@ gto_store_to_buffer:
         iny
         lda     chn_prev_row_2,x
         sta     (zp_temp1),y
+@store_done:
         ; Update decoded row
         lda     decode_row
         sta     chn_decoded_row,x
 gto_already_decoded:
+        jsr     checkpoint
         ; Set zp_trackptr to channel's decode buffer
         lda     decode_buffer_lo,x
         sta     zp_trackptr
@@ -1117,13 +1154,27 @@ gto_already_decoded:
 
 ; decode_advance_row - Decode one row, updating prev_row and state
 ; Input: X = channel (chn_decoded_pat,x must contain pattern index)
-; Updates: chn_src_off, chn_rle_count, chn_prev_row_*
+; Updates: chn_src_off, chn_rle_count, chn_gap_remaining, chn_prev_row_*
 decode_advance_row:
-        ; Check for pending RLE
+        jsr     checkpoint
+        ; Check for implicit zeros from gap encoding
+        ; Store gap_remaining as flag: non-zero = gap zero, zero = normal row
+        lda     chn_gap_remaining,x
+        sta     zp_is_gap_zero          ; ZP access saves cycles
+        beq     dar_not_gap
+        ; Gap: decrement and return (flag already set to non-zero)
+        dec     chn_gap_remaining,x
+        rts
+dar_not_gap:
+        ; Check for pending RLE (is_gap_zero already 0)
         lda     chn_rle_count,x
         beq     dar_not_rle
-        ; RLE: prev_row stays same, just decrement count
+        ; RLE: prev_row stays same, just decrement count and set gap
         dec     chn_rle_count,x
+        lda     chn_gap,x
+        beq     @rle_done
+        sta     chn_gap_remaining,x
+@rle_done:
         rts
 dar_not_rle:
         ; Set up source pointer from pattern index
@@ -1140,7 +1191,8 @@ dar_not_rle:
         adc     zp_song_base
         sta     zp_temp0
         iny
-        lda     (zp_ptr),y          ; ptr hi
+        lda     (zp_ptr),y          ; ptr hi (gap code in bits 5-7)
+        and     #$1F                ; mask off gap code, keep offset bits 8-12
         adc     zp_song_base+1
         sta     zp_temp0+1
         ; Add current source offset
@@ -1153,52 +1205,17 @@ dar_not_rle:
 @dar_no_carry:
         jsr     checkpoint
         ; Read encoded byte
-        ; Format: $00-$0E = dict[0]+RLE, $0F-$EE = dict[1-224], $EF-$FE = RLE, $FF = extended
+        ; Format: $00-$0F = dict[0]+RLE, $10-$EE = dict[1-223], $EF-$FE = RLE, $FF = extended
         ldy     #0
         lda     (zp_temp0),y
-        cmp     #$0F
-        bcc     dar_dict_zero_rle   ; $00-$0E: dict[0] with RLE 0-14
+        cmp     #$10
+        bcc     dar_dict_zero_rle   ; $00-$0F: dict[0] with RLE 0-15
         cmp     #$EF
         bcs     dar_check_rle       ; $EF-$FF: RLE or extended
-        ; $0F-$EE: dict[1-224] - subtract $0E to get actual index
+        ; $10-$EE: dict[1-223] - subtract $0F to get actual index (fall through)
         sec
-        sbc     #$0E                ; $0F->1, $10->2, etc.
-        jmp     dar_copy_dict_entry
-dar_dict_zero_rle:
-        ; $00-$0E: dict[0] with RLE 0-14
-        ; A = RLE count (0 = just dict[0], 1 = dict[0] + 1 repeat, etc.)
-        ; dict[0] is always [0,0,0], not stored in memory
-        sta     chn_rle_count,x     ; store RLE count for subsequent calls
-        lda     #0
-        sta     chn_prev_row_0,x
-        sta     chn_prev_row_1,x
-        sta     chn_prev_row_2,x
-        inc     chn_src_off,x       ; advance past the byte
-        rts
-dar_check_rle:
-        cmp     #$FF
-        beq     dar_extended
-        ; $EF-$FE: RLE 1-16 (repeat prev row)
-        sec
-        sbc     #$EE                ; count = byte - 0xEE (1-16)
-        sta     chn_rle_count,x
-        inc     chn_src_off,x       ; advance past RLE byte
-        dec     chn_rle_count,x     ; consume one repeat for this row
-        rts                         ; prev_row unchanged
-dar_extended:
-        ; $FF + byte: extended dict index = 225 + next byte
-        ; dict[0] implicit, so offset = (225 + byte) - 1 = 224 + byte
-        inc     chn_src_off,x       ; skip 0xFF marker
-        ldy     #1
-        lda     (zp_temp0),y        ; get extended byte
-        clc
-        adc     #224                ; offset = 224 + byte (dict[225] at offset 224)
-        sta     dar_dict_idx
-        lda     #0
-        rol                         ; index hi = carry
-        sta     dar_dict_idx_hi
-        jmp     dar_copy_dict_entry_16
-
+        sbc     #$0F                ; $10->1, $11->2, etc.
+        ; Fall through to dar_copy_dict_entry
 ; Copy dict entry A to prev_row (primary index 1-224)
 ; Split dict format: 3 separate arrays indexed by Y
 ; dict[0] is implicit (always 0), so dict[1] is at offset 0
@@ -1212,7 +1229,40 @@ dar_copy_dict_entry:
         lda     (zp_dict2),y
         sta     chn_prev_row_2,x
         inc     chn_src_off,x       ; advance past dict index byte
-        rts
+        jmp     dar_set_gap
+dar_dict_zero_rle:
+        ; $00-$0F: dict[0] with RLE 0-15
+        ; A = RLE count (0 = just dict[0], 1 = dict[0] + 1 repeat, etc.)
+        ; dict[0] is always [0,0,0], not stored in memory
+        sta     chn_rle_count,x     ; store RLE count for subsequent calls
+        lda     #0
+        sta     chn_prev_row_0,x
+        sta     chn_prev_row_1,x
+        sta     chn_prev_row_2,x
+        inc     chn_src_off,x       ; advance past the byte
+        jmp     dar_set_gap
+dar_check_rle:
+        cmp     #$FF
+        beq     dar_extended
+        ; $EF-$FE: RLE 1-16 (repeat prev row)
+        sec
+        sbc     #$EF                ; count-1 = byte - 0xEF (0-15 remaining after this row)
+        sta     chn_rle_count,x
+        inc     chn_src_off,x       ; advance past RLE byte
+        jmp     dar_set_gap         ; prev_row unchanged, but set up gap zeros
+dar_extended:
+        ; $FF + byte: extended dict index = 224 + next byte
+        ; dict[0] implicit, so offset = (224 + byte) - 1 = 223 + byte
+        inc     chn_src_off,x       ; skip 0xFF marker
+        ldy     #1
+        lda     (zp_temp0),y        ; get extended byte
+        clc
+        adc     #223                ; offset = 223 + byte (dict[224] at offset 223)
+        sta     dar_dict_idx
+        lda     #0
+        rol                         ; index hi = carry
+        sta     dar_dict_idx_hi
+        jmp     dar_copy_dict_entry_16
 
 ; Copy dict entry for extended index (offset 224 + byte, dict indices 225-409)
 dar_copy_dict_entry_16:
@@ -1234,7 +1284,7 @@ dar_copy_dict_entry_16:
         dec     zp_dict1+1
         dec     zp_dict2+1
         inc     chn_src_off,x       ; advance past extended byte
-        rts
+        jmp     dar_set_gap
 dar_ext_direct:
         lda     (zp_dict0),y
         sta     chn_prev_row_0,x
@@ -1243,7 +1293,13 @@ dar_ext_direct:
         lda     (zp_dict2),y
         sta     chn_prev_row_2,x
         inc     chn_src_off,x       ; advance past extended byte
-        rts
+        ; Fall through to dar_set_gap
+dar_set_gap:
+        ; Set up implicit zeros after this row (gap encoding)
+        lda     chn_gap,x
+        beq     @skip               ; gap=0: skip sta (gap_remaining already 0)
+        sta     chn_gap_remaining,x
+@skip:  rts
 
 ; ============================================================================
 ; Data Section (player variables initialized to zero serve as boundary marker)
@@ -1319,6 +1375,8 @@ chn_decoded_row:        .byte   $FF, $FF, $FF  ; Which row (0-63) is decoded
 ; Decoder state per channel for streaming decode
 chn_src_off:            .byte   0, 0, 0        ; Byte offset into packed pattern data
 chn_rle_count:          .byte   0, 0, 0        ; RLE count remaining
+chn_gap:                .byte   0, 0, 0        ; Gap value for current pattern (0,1,3,7,15,31,63)
+chn_gap_remaining:      .byte   0, 0, 0        ; Implicit zeros remaining after current row
 chn_prev_row_0:         .byte   0, 0, 0        ; prev_row byte 0 (note) per channel
 chn_prev_row_1:         .byte   0, 0, 0        ; prev_row byte 1 (inst|eff) per channel
 chn_prev_row_2:         .byte   0, 0, 0        ; prev_row byte 2 (param) per channel
@@ -1344,6 +1402,11 @@ dar_dict_idx_hi:        .byte   0
 
 sidregoffs:
         .byte   0, 7, 14
+
+; Gap code to gap value lookup table
+; Code 0-6 maps to gap 0,1,3,7,15,31,63 (2^N - 1 for N>0)
+gap_code_table:
+        .byte   0, 1, 3, 7, 15, 31, 63
 
 ; Vibrato table (9 rows, depth 0 deleted - code skips lookup when depth=0)
 ; Frequency order: 4(22) 2(13) 3(11) 1(6) 6(2) 10(1) 5(1) 8(1) 15(1)
