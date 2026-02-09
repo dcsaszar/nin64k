@@ -630,6 +630,8 @@ func GetDecompressorCodeWithLabels() ([]byte, map[string]int, map[int]string) {
 	emit(0x28)           // PLP (C=carry_a)
 	emit(0x69, 0x00)    // ADC #0 (A=3*hi+all carries)
 	emit(0x85, zpValHi) // STA zpValHi
+	emit(0x20)          // JSR checkpoint (break up long path)
+	jsrCheckpointMid := placeholder()
 	label("compute_copy_src")
 	// Compute copy source = dst - dist
 	// When dist > dst, result is negative and needs adjustment to reach otherDict
@@ -830,6 +832,7 @@ func GetDecompressorCodeWithLabels() ([]byte, map[string]int, map[int]string) {
 	checkpointPos := label("checkpoint")
 	patch16(jsrCheckpoint, base+uint16(checkpointPos))
 	patch16(jsrCheckpointBit, base+uint16(checkpointPos))
+	patch16(jsrCheckpointMid, base+uint16(checkpointPos))
 	emit(0x60) // RTS
 
 	return code, labels, annotations

@@ -1,5 +1,5 @@
 ; Generated file - do not edit. Modify cmd/compress/decompress6502.go instead.
-; Size: 272 bytes
+; Size: 275 bytes
 ; External zero page variables (must be defined by caller)
 ; zp_src_lo       = $02   ; Source pointer (compressed data)
 ; zp_src_hi       = $03
@@ -97,6 +97,7 @@ backref_common:
         plp
         adc     #$00
         sta     zp_val_hi
+        jsr     checkpoint
         lda     zp_out_lo
         sec
         sbc     zp_val_lo
@@ -202,5 +203,5 @@ terminator:
         pla
         pla
         rts
-; checkpoint: max 54 cycles between calls
+; checkpoint: max 41 cycles between calls
 .endproc
