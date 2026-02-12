@@ -1396,6 +1396,7 @@ func findReachableOrders(raw []byte, baseAddr, startOrder, numOrders int,
 type ConversionStats struct {
 	OrigOrders          int
 	NewOrders           int
+	OrderGapUsed        int // bytes of order table gaps used for patterns
 	OrigPatterns        int
 	UniquePatterns      int
 	OrigWaveSize        int
@@ -2396,6 +2397,12 @@ func convertToNewFormat(raw []byte, songNum int, effectRemap [16]byte, fSubRemap
 	// Gap 5: free slots in dict2 (params)
 	dict2GapStart := rowDictOff + 730 + dictFreeStart
 
+	// Gaps 6-11: unused order table slots (bytes newNumOrders..255 in each table)
+	orderGapSize := 256 - newNumOrders
+	if orderGapSize < 0 {
+		orderGapSize = 0
+	}
+
 	// Collect all gaps for pattern placement
 	type gap struct {
 		start int
@@ -2409,6 +2416,12 @@ func convertToNewFormat(raw []byte, songNum int, effectRemap [16]byte, fSubRemap
 		{dict0GapStart, dictFreeSize, 0},
 		{dict1GapStart, dictFreeSize, 0},
 		{dict2GapStart, dictFreeSize, 0},
+		{transpose0Off + newNumOrders, orderGapSize, 0}, // Gap 6: transpose0
+		{transpose1Off + newNumOrders, orderGapSize, 0}, // Gap 7: transpose1
+		{transpose2Off + newNumOrders, orderGapSize, 0}, // Gap 8: transpose2
+		{trackptr0Off + newNumOrders, orderGapSize, 0},  // Gap 9: trackptr0
+		{trackptr1Off + newNumOrders, orderGapSize, 0},  // Gap 10: trackptr1
+		{trackptr2Off + newNumOrders, orderGapSize, 0},  // Gap 11: trackptr2
 	}
 
 	// Compute overlap potential for each pattern
@@ -2543,6 +2556,13 @@ func convertToNewFormat(raw []byte, songNum int, effectRemap [16]byte, fSubRemap
 			inGap[idx] = gapStart + int(off)
 		}
 	}
+
+	// Calculate order gap usage (gaps 6-11 are order table gaps)
+	orderGapUsed := 0
+	for gi := 6; gi < len(gaps); gi++ {
+		orderGapUsed += gaps[gi].used
+	}
+	stats.OrderGapUsed = orderGapUsed
 
 	// Build remaining patterns for overlap optimization (exclude gap patterns)
 	var remainingPacked [][]byte
@@ -5579,6 +5599,7 @@ func main() {
 	mergedTotalCLC := make(map[uint16]int)
 	mergedTotalSEC := make(map[uint16]int)
 	maxDataSize := 0
+	totalOrderWaste := 0
 	for _, r := range allResults {
 		if r.err != "" {
 			fmt.Printf("Song %d: ERROR %s\n", r.songNum, r.err)
@@ -5593,7 +5614,9 @@ func main() {
 			cycleRatio := float64(r.newCycles) / float64(r.builtinCycles)
 			maxCycleRatio := float64(r.newMaxCycles) / float64(r.builtinMaxCycles)
 			sizeRatio := float64(r.newSize) / float64(r.origSize)
-			fmt.Printf("Song %d: cycles: %.2fx, max: %.2fx, size: %.2fx, dict: %d, len: $%X, eq: %d, ext: %d\n", r.songNum, cycleRatio, maxCycleRatio, sizeRatio, s.PatternDictSize, r.newSize, s.ExtendedBeforeEquiv, s.ExtendedIndices)
+			orderGapAvail := 6 * (256 - s.NewOrders)
+			totalOrderWaste += orderGapAvail - s.OrderGapUsed
+			fmt.Printf("Song %d: cycles: %.2fx, max: %.2fx, size: %.2fx, dict: %d, len: $%X, ord: %d, gap: %d/%d\n", r.songNum, cycleRatio, maxCycleRatio, sizeRatio, s.PatternDictSize, r.newSize, s.NewOrders, s.OrderGapUsed, orderGapAvail)
 			if s.NewWaveSize > maxWave {
 				maxWave = s.NewWaveSize
 			}
@@ -5645,6 +5668,7 @@ func main() {
 		savings := totalOrigSize - totalNewSize
 		fmt.Printf("\nAll 9 songs passed! Saved %d bytes (%.1f%%)\n", savings, 100*float64(savings)/float64(totalOrigSize))
 		fmt.Printf("Max sizes: orders=%d, wave=%d, arp=%d, filter=%d, patterns=%d, dict=%d, packed=%d\n", maxOrders, maxWave, maxArp, maxFilter, maxPatterns, maxDictSize, maxPackedSize)
+		fmt.Printf("Order table gaps: %d bytes unused\n", totalOrderWaste)
 		fmt.Printf("Pattern indices: %d primary (1 byte), %d extended (2 bytes) = %d extra bytes\n", totalPrimary, totalExtended, totalExtended)
 
 		// Report coverage gaps in player code
