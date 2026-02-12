@@ -1301,9 +1301,10 @@ func getPatternBreakInfo(pat []byte) (breakRow int, jumpTarget int) {
 	return 64, -1
 }
 
-// remapPatternPositionJumps rewrites position jump targets using the order mapping.
-// Since trackptrs are now in playback order, all jumps point to the next sequential order,
-// making them redundant (but we keep them for compatibility with bit packing constraints).
+// remapPatternPositionJumps converts position jumps (0x0B) to pattern breaks (0x0D).
+// Since trackptrs are now in playback order, jumps are redundant - the next sequential
+// order IS where the jump would go. Pattern breaks naturally advance to the next order.
+// The remapPatternEffects pass will then convert 0x0D to effect 0 with proper byte encoding.
 func remapPatternPositionJumps(pat []byte, orderMap map[int]int) {
 	for row := 0; row < 64; row++ {
 		rowOff := row * 3
@@ -1311,10 +1312,10 @@ func remapPatternPositionJumps(pat []byte, orderMap map[int]int) {
 		byte1 := pat[rowOff+1]
 		effect := (byte1 >> 5) | ((byte0 >> 4) & 0x08)
 		if effect == 0x0B {
-			oldTarget := int(pat[rowOff+2])
-			if newTarget, ok := orderMap[oldTarget]; ok {
-				pat[rowOff+2] = byte(newTarget)
-			}
+			// Convert to pattern break (0x0D): keep byte0[7] for effect bit 3, change byte1[7:5] to 5
+			// Effect 0x0D = bit3=1, bits2:0=5 -> byte0[7]=1, byte1[7:5]=5
+			pat[rowOff+1] = (byte1 & 0x1F) | 0xA0 // 0xA0 = 5 << 5
+			pat[rowOff+2] = 0                     // break param = 0 (start at row 0)
 		}
 	}
 }
@@ -5172,7 +5173,7 @@ func main() {
 	fmt.Println(")")
 
 	// Analyze effect parameter distributions
-	effectNames := []string{"0", "1(slide)", "2(pulse)", "3(porta)", "4(vib)", "5", "6", "7(AD)", "8(SR)", "9(wave)", "A(arp)", "B(jump)", "C", "D(break)", "E(reso)", "F(ext)"}
+	effectNames := []string{"0", "1(slide)", "2(pulse)", "3(porta)", "4(vib)", "5", "6", "7(AD)", "8(SR)", "9(wave)", "A(arp)", "B(slide)", "C", "D(break)", "E(reso)", "F(ext)"}
 	allEffectParams := make(map[int]map[int]int)
 	for i := 0; i < 16; i++ {
 		allEffectParams[i] = make(map[int]int)

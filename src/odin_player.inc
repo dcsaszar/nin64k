@@ -62,7 +62,7 @@ zp_dict2         = $20          ; 2 bytes: dict2 (param bytes)
 ; Effect mapping (frequency-sorted):
 ;   0=special (param: 0=nop, 1=vib off, 2=break, 3=fineslide)
 ;   1=arp 2=porta 3=speed 4=hrdrest 5=filttrig 6=SR 7=wave
-;   8=pulse 9=AD A=reso B=slide C=globalvol D=filtmode E=jump
+;   8=pulse 9=AD A=reso B=slide C=globalvol D=filtmode
 ;
 ; Example: $00 $20 $49
 ;   Note=$00:    note = $00 & $7F = 0 (none), effect bit 3 = 0
@@ -807,7 +807,7 @@ fx_haseffect:
         jmp     do_slide_vib
 @fx_c_to_e:
         cmp     #$e0
-        bcs     @fx_e
+        bcs     do_slide_vib            ; Effect E removed (position jumps converted to breaks)
         cmp     #$d0
         bcs     @fx_d
         ; Effect C = global volume (inlined)
@@ -823,13 +823,6 @@ fx_haseffect:
         bne     @fx_exit3
         lda     chn_effectpar,x
         sta     filter_mode
-        jmp     do_slide_vib
-@fx_e:
-        ; Effect E = position jump (inlined)
-        lda     chn_effectpar,x
-        sta     nextordernumber
-        lda     #$80
-        sta     forcenewpattern
         jmp     do_slide_vib
 do_slide_vib:
         jsr     checkpoint
