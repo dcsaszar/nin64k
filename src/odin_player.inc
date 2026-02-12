@@ -32,11 +32,12 @@ zp_dict2         = $20          ; 2 bytes: dict2 (param bytes)
 ;       Virtual base is $5F0, so inst N is at $5F0 + N*16
 ; $7F0: Filtertable (227 bytes max)
 ; $8D3: Arptable (188 bytes max)
-; $98F: Delta base (1 byte) - index into delta_table for trackptr decoding
-; $990: Row dict0 (365 bytes) - note bytes
-; $AFD: Row dict1 (365 bytes) - inst|effect bytes
-; $C6A: Row dict2 (365 bytes) - param bytes
-; $DD7: Packed pattern data pointers (dynamic length) - 2 bytes per pattern
+; $98F: Transpose base (1 byte) - base index into transpose_table
+; $990: Delta base (1 byte) - base index into delta_table for trackptr decoding
+; $991: Row dict0 (365 bytes) - note bytes
+; $AFE: Row dict1 (365 bytes) - inst|effect bytes
+; $C6B: Row dict2 (365 bytes) - param bytes
+; $DD8: Packed pattern data pointers (dynamic length) - 2 bytes per pattern
 ;
 ; Global wavetable (163 bytes) is stored in player, shared across all songs.
 ; Instrument wave indices point directly into global_wavetable.
@@ -72,9 +73,9 @@ zp_dict2         = $20          ; 2 bytes: dict2 (param bytes)
 ;   -> effect = (1<<5>>5) | (($00>>4)&8) = 1 | 0 = 1 (arpeggio $49)
 
 ; Pattern packing constants
-ROW_DICT_OFF        = $990
+ROW_DICT_OFF        = $991
 ROW_DICT_SIZE       = 365
-PACKED_PTRS_OFF     = $DD7          ; Pointers are absolute song-base offsets
+PACKED_PTRS_OFF     = $DD8          ; Pointers are absolute song-base offsets
 
 ; Instrument parameter offsets within 16-byte instrument block
 INST_AD          = 0
@@ -175,6 +176,16 @@ player_init:
         sta     chn_trackptr_cur+0
         sta     chn_trackptr_cur+1
         sta     chn_trackptr_cur+2
+        ; Load transpose base from song data ($98F)
+        lda     zp_song_base+1
+        clc
+        adc     #9
+        sta     zp_ptr+1
+        lda     #$8F
+        sta     zp_ptr
+        ldy     #0
+        lda     (zp_ptr),y
+        sta     transpose_base
         jsr     checkpoint
         ; Set up split dictionary pointers (3 arrays of ROW_DICT_SIZE bytes each)
         ; dict0 (notes) at ROW_DICT_OFF
@@ -1051,7 +1062,7 @@ check_hardrestart:
 
 ; get_transpose_order - Get transpose for channel Y at order X
 ; Returns: A = transpose value (from transpose_table lookup)
-; Transpose tables store indices into transpose_table
+; Transpose tables store relative indices (0-15), add base to get absolute
 get_transpose_order:
         lda     transpose_page,y
         sta     zp_ptr+1
@@ -1059,7 +1070,9 @@ get_transpose_order:
         sta     zp_ptr
         txa
         tay
-        lda     (zp_ptr),y          ; load index
+        lda     (zp_ptr),y          ; load relative index (0-15)
+        clc
+        adc     transpose_base      ; add base to get absolute index
         tay
         lda     transpose_table,y   ; look up actual transpose value
         rts
@@ -1408,6 +1421,7 @@ chn_trackptr_tmp:       .byte   0              ; Temp storage for get_trackptr_o
 
 ; Values computed from song base during init
 transpose_page:         .byte   0, 0, 0
+transpose_base:         .byte   0               ; Base index into transpose_table
 trackptr_page:          .byte   0, 0, 0
 packed_ptrs_addr:       .word   0       ; Address of packed pointers table
 

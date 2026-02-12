@@ -1,6 +1,6 @@
-; Auto-generated lookup tables - DO NOT EDIT
+; Auto-generated delta table - DO NOT EDIT
+; 117 bytes
 
-; Delta table: 117 bytes
 delta_table:
 	.byte	$D8, $EA, $EC, $ED, $EE, $F3, $F4, $F5, $F6, $F7, $F8, $F9, $FA, $FE, $00, $02	; 0
 	.byte	$04, $05, $06, $07, $08, $09, $0A, $0B, $0C, $0D, $0E, $10, $12, $14, $15, $F0	; 16
@@ -11,10 +11,9 @@ delta_table:
 	.byte	$03, $05, $08, $0A, $0B, $1E, $06, $26, $36, $F6, $F7, $F9, $FA, $FB, $FC, $FF	; 96
 	.byte	$00, $01, $09, $0C, $23	; 112
 
+; Song delta bases (9 bytes)
+song_delta_bases:
+	.byte	85, 0, 61, 18, 56, 35, 71, 70, 73
+
 TRACKPTR_START = 21
 
-; Transpose table: 45 bytes
-transpose_table:
-	.byte	$F4, $F8, $FA, $00, $01, $04, $06, $07, $08, $0C, $0D, $12, $13, $14, $F4, $F9	; 0
-	.byte	$03, $0F, $DC, $E8, $F0, $F5, $FB, $FC, $FE, $00, $01, $05, $07, $0C, $F4, $03	; 16
-	.byte	$04, $06, $09, $0A, $E8, $FA, $FD, $FF, $02, $00, $20, $18, $24	; 32

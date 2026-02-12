@@ -30,10 +30,11 @@ const deltaEmpty int8 = -128
 type deltaSolverState struct {
 	sorted [9][]int
 	needs  [9][256]bool
+	window int
 }
 
-func newDeltaSolver(songSets [9][]int) *deltaSolverState {
-	s := &deltaSolverState{}
+func newDeltaSolverWithWindow(songSets [9][]int, window int) *deltaSolverState {
+	s := &deltaSolverState{window: window}
 	for i, set := range songSets {
 		if len(set) == 0 {
 			continue
@@ -48,8 +49,13 @@ func newDeltaSolver(songSets [9][]int) *deltaSolverState {
 	return s
 }
 
+func newDeltaSolver(songSets [9][]int) *deltaSolverState {
+	return newDeltaSolverWithWindow(songSets, 32)
+}
+
 // buildWithLimit returns length only, -1 if exceeds maxLen (for fast rejection)
 func (s *deltaSolverState) buildLen(order []int, maxLen int) int {
+	w := s.window
 	var arr [512]int8
 	for i := range arr {
 		arr[i] = deltaEmpty
@@ -58,7 +64,7 @@ func (s *deltaSolverState) buildLen(order []int, maxLen int) int {
 	for i, e := range elems {
 		arr[i] = int8(e)
 	}
-	arrLen := 32
+	arrLen := w
 	for orderIdx := 1; orderIdx < 9; orderIdx++ {
 		song := order[orderIdx]
 		elems := s.sorted[song]
@@ -67,18 +73,18 @@ func (s *deltaSolverState) buildLen(order []int, maxLen int) int {
 		}
 		needs := &s.needs[song]
 		songSize := len(elems)
-		bestBase, bestCost := arrLen, 32
+		bestBase, bestCost := arrLen, w
 		var covCount [256]int8
 		emptySlots := 0
-		for i := 0; i < 32 && i < arrLen; i++ {
+		for i := 0; i < w && i < arrLen; i++ {
 			if arr[i] == deltaEmpty {
 				emptySlots++
 			} else {
 				covCount[int(arr[i])+128]++
 			}
 		}
-		if 32 > arrLen {
-			emptySlots += 32 - arrLen
+		if w > arrLen {
+			emptySlots += w - arrLen
 		}
 		missing := songSize
 		for i := range covCount {
@@ -87,7 +93,7 @@ func (s *deltaSolverState) buildLen(order []int, maxLen int) int {
 			}
 		}
 		if missing <= emptySlots {
-			cost := 32 - arrLen
+			cost := w - arrLen
 			if cost < 0 {
 				cost = 0
 			}
@@ -96,7 +102,7 @@ func (s *deltaSolverState) buildLen(order []int, maxLen int) int {
 			}
 		}
 		for base := 1; base <= arrLen; base++ {
-			oldPos, newPos := base-1, base+31
+			oldPos, newPos := base-1, base+w-1
 			if arr[oldPos] == deltaEmpty {
 				emptySlots--
 			} else {
@@ -120,7 +126,7 @@ func (s *deltaSolverState) buildLen(order []int, maxLen int) int {
 				emptySlots++
 			}
 			if missing <= emptySlots {
-				cost := base + 32 - arrLen
+				cost := base + w - arrLen
 				if cost < 0 {
 					cost = 0
 				}
@@ -129,7 +135,7 @@ func (s *deltaSolverState) buildLen(order []int, maxLen int) int {
 				}
 			}
 		}
-		newLen := bestBase + 32
+		newLen := bestBase + w
 		if newLen > arrLen {
 			arrLen = newLen
 		}
@@ -138,7 +144,7 @@ func (s *deltaSolverState) buildLen(order []int, maxLen int) int {
 			return -1
 		}
 		var covered [256]bool
-		for i := bestBase; i < bestBase+32; i++ {
+		for i := bestBase; i < bestBase+w; i++ {
 			if arr[i] != deltaEmpty {
 				covered[int(arr[i])+128] = true
 			}
@@ -158,6 +164,7 @@ func (s *deltaSolverState) buildLen(order []int, maxLen int) int {
 }
 
 func (s *deltaSolverState) build(order []int) DeltaTableResult {
+	w := s.window
 	var arr [512]int8
 	for i := range arr {
 		arr[i] = deltaEmpty
@@ -167,7 +174,7 @@ func (s *deltaSolverState) build(order []int) DeltaTableResult {
 	for i, e := range elems {
 		arr[i] = int8(e)
 	}
-	arrLen := 32
+	arrLen := w
 	bases[order[0]] = 0
 	for orderIdx := 1; orderIdx < 9; orderIdx++ {
 		song := order[orderIdx]
@@ -177,18 +184,18 @@ func (s *deltaSolverState) build(order []int) DeltaTableResult {
 		}
 		needs := &s.needs[song]
 		songSize := len(elems)
-		bestBase, bestCost := arrLen, 32
+		bestBase, bestCost := arrLen, w
 		var covCount [256]int8
 		emptySlots := 0
-		for i := 0; i < 32 && i < arrLen; i++ {
+		for i := 0; i < w && i < arrLen; i++ {
 			if arr[i] == deltaEmpty {
 				emptySlots++
 			} else {
 				covCount[int(arr[i])+128]++
 			}
 		}
-		if 32 > arrLen {
-			emptySlots += 32 - arrLen
+		if w > arrLen {
+			emptySlots += w - arrLen
 		}
 		missing := songSize
 		for i := range covCount {
@@ -197,7 +204,7 @@ func (s *deltaSolverState) build(order []int) DeltaTableResult {
 			}
 		}
 		if missing <= emptySlots {
-			cost := 32 - arrLen
+			cost := w - arrLen
 			if cost < 0 {
 				cost = 0
 			}
@@ -206,7 +213,7 @@ func (s *deltaSolverState) build(order []int) DeltaTableResult {
 			}
 		}
 		for base := 1; base <= arrLen; base++ {
-			oldPos, newPos := base-1, base+31
+			oldPos, newPos := base-1, base+w-1
 			if arr[oldPos] == deltaEmpty {
 				emptySlots--
 			} else {
@@ -230,7 +237,7 @@ func (s *deltaSolverState) build(order []int) DeltaTableResult {
 				emptySlots++
 			}
 			if missing <= emptySlots {
-				cost := base + 32 - arrLen
+				cost := base + w - arrLen
 				if cost < 0 {
 					cost = 0
 				}
@@ -239,12 +246,12 @@ func (s *deltaSolverState) build(order []int) DeltaTableResult {
 				}
 			}
 		}
-		if bestBase+32 > arrLen {
-			arrLen = bestBase + 32
+		if bestBase+w > arrLen {
+			arrLen = bestBase + w
 		}
 		bases[song] = bestBase
 		var covered [256]bool
-		for i := bestBase; i < bestBase+32; i++ {
+		for i := bestBase; i < bestBase+w; i++ {
 			if arr[i] != deltaEmpty {
 				covered[int(arr[i])+128] = true
 			}
@@ -318,8 +325,8 @@ func (s *deltaSolverState) searchWithFirst(first int, globalBest *int32) DeltaTa
 	return bestResult
 }
 
-func solveDeltaTable(songSets [9][]int) DeltaTableResult {
-	s := newDeltaSolver(songSets)
+func solveDeltaTableWithWindow(songSets [9][]int, window int) DeltaTableResult {
+	s := newDeltaSolverWithWindow(songSets, window)
 	results := make(chan DeltaTableResult, 9)
 	var globalBest int32 = 9999
 	var wg sync.WaitGroup
@@ -347,6 +354,10 @@ func solveDeltaTable(songSets [9][]int) DeltaTableResult {
 	}
 	bestResult.SongSets = songSets
 	return bestResult
+}
+
+func solveDeltaTable(songSets [9][]int) DeltaTableResult {
+	return solveDeltaTableWithWindow(songSets, 32)
 }
 
 func writeTablesInc(deltaResult DeltaTableResult, transposeResult TransposeTableResult, path string) error {
@@ -425,48 +436,29 @@ type TransposeTableResult struct {
 }
 
 func solveTransposeTable(songSets [9][]int8) TransposeTableResult {
-	// Collect all unique values across all songs
-	allUnique := make(map[int8]bool)
-	for _, set := range songSets {
-		for _, v := range set {
-			allUnique[v] = true
+	// Convert int8 sets to int sets for delta solver
+	var intSets [9][]int
+	for i, set := range songSets {
+		intSets[i] = make([]int, len(set))
+		for j, v := range set {
+			intSets[i][j] = int(v)
 		}
 	}
 
-	// Sort all values
-	table := make([]int8, 0, len(allUnique))
-	for v := range allUnique {
-		table = append(table, v)
-	}
-	sort.Slice(table, func(i, j int) bool { return table[i] < table[j] })
+	// Reuse delta solver with window=16
+	deltaResult := solveDeltaTableWithWindow(intSets, 16)
 
-	// Build value to index map
-	valToIdx := make(map[int8]int)
-	for i, v := range table {
-		valToIdx[v] = i
-	}
-
-	// Find best base for each song (minimize max index needed)
-	var bases [9]int
-	for songIdx, set := range songSets {
-		if len(set) == 0 {
-			continue
+	// Convert back to int8
+	table := make([]int8, len(deltaResult.Table))
+	for i, v := range deltaResult.Table {
+		if v == deltaEmpty {
+			table[i] = 0
+		} else {
+			table[i] = v
 		}
-		// Find min and max indices for this song's values
-		minIdx, maxIdx := len(table), 0
-		for _, v := range set {
-			idx := valToIdx[v]
-			if idx < minIdx {
-				minIdx = idx
-			}
-			if idx > maxIdx {
-				maxIdx = idx
-			}
-		}
-		bases[songIdx] = minIdx
 	}
 
-	return TransposeTableResult{Table: table, Bases: bases}
+	return TransposeTableResult{Table: table, Bases: deltaResult.Bases}
 }
 
 
@@ -1982,8 +1974,8 @@ func convertToNewFormat(raw []byte, songNum int, effectRemap [16]byte, fSubRemap
 	newInstOff := 0x600    // Instruments 1-31 start here (inst 0 not stored)
 	filterOff := 0x7F0     // Filter at $7F0 (227 bytes max)
 	arpOff := 0x8D3        // Arp at $8D3 (188 bytes max)
-	rowDictOff := 0x990    // Row dict0 (notes), dict1 at +365, dict2 at +730 (1 byte gap after arp)
-	packedPtrsOff := 0xDD7 // Packed pointers (fixed location)
+	rowDictOff := 0x991    // Row dict0 (notes), dict1 at +365, dict2 at +730 (2 byte gap after arp for bases)
+	packedPtrsOff := 0xDD8 // Packed pointers (fixed location)
 
 	// Extract patterns to slice for packing (do effect/order remapping first)
 	patternData := make([][]byte, numPatterns)
@@ -2440,9 +2432,9 @@ func convertToNewFormat(raw []byte, songNum int, effectRemap [16]byte, fSubRemap
 	if filterGapSize < 0 {
 		filterGapSize = 0
 	}
-	// Gap 2: after arp, before reserved byte at 0x98F (dict starts at 0x990)
+	// Gap 2: after arp, before reserved bytes at 0x98F-0x990 (dict starts at 0x991)
 	arpGapStart := arpOff + newArpSize
-	arpGapSize := 0x98F - arpGapStart // Exclude reserved byte
+	arpGapSize := 0x98F - arpGapStart // Exclude 2 reserved bytes for transpose/delta bases
 	if arpGapSize < 0 {
 		arpGapSize = 0
 	}
@@ -2788,7 +2780,7 @@ func convertToNewFormat(raw []byte, songNum int, effectRemap [16]byte, fSubRemap
 	// Copy deduplicated tables (wavetable is global in player)
 	copy(out[filterOff:], newFilterTable)
 	copy(out[arpOff:], newArpTable)
-	// Note: reserved byte at 0x98F is filled with delta base after delta table is computed
+	// Note: reserved bytes at 0x98F-0x990 are filled with transpose/delta bases later
 
 
 
@@ -5602,15 +5594,35 @@ func main() {
 			len(deltaResult.Table), len(transposeResult.Table), tablesPath)
 	}
 
-	// Build transpose value -> index map
-	transposeToIdx := make(map[int8]byte)
-	for i, v := range transposeResult.Table {
-		transposeToIdx[v] = byte(i)
+	// Rebuild player with correct tables
+	if err := rebuildPlayer(); err != nil {
+		fmt.Printf("Error rebuilding player with tables: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Reload player with correct tables
+	playerData, err = os.ReadFile(projectPath("build/player.bin"))
+	if err != nil {
+		fmt.Printf("Error reloading build/player.bin: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Build per-song transpose value -> relative index maps
+	var transposeToRelIdx [9]map[int8]byte
+	for songIdx := 0; songIdx < 9; songIdx++ {
+		base := transposeResult.Bases[songIdx]
+		transposeToRelIdx[songIdx] = make(map[int8]byte)
+		for i := 0; i < 16 && base+i < len(transposeResult.Table); i++ {
+			v := transposeResult.Table[base+i]
+			if _, exists := transposeToRelIdx[songIdx][v]; !exists {
+				transposeToRelIdx[songIdx][v] = byte(i)
+			}
+		}
 	}
 
 	// Analyze row dict combinations across all songs
 	var totalCombos [8]int
-	const rowDictOffAnalysis = 0x99F
+	const rowDictOffAnalysis = 0x991
 	for songNum := 1; songNum <= 9; songNum++ {
 		if convertedSongs[songNum-1] == nil {
 			continue
@@ -5651,8 +5663,9 @@ func main() {
 		if convertedSongs[songNum-1] == nil {
 			continue
 		}
-		// Set delta base at 0x98F (transpose uses absolute indices, no base needed)
-		convertedSongs[songNum-1][0x98F] = byte(deltaResult.Bases[songNum-1])
+		// Set transpose base at 0x98F, delta base at 0x990
+		convertedSongs[songNum-1][0x98F] = byte(transposeResult.Bases[songNum-1])
+		convertedSongs[songNum-1][0x990] = byte(deltaResult.Bases[songNum-1])
 		// Convert absolute trackptr values to delta table indices
 		numOrders := convertedStats[songNum-1].NewOrders
 		for ch := 0; ch < 3; ch++ {
@@ -5670,14 +5683,14 @@ func main() {
 				prev = curr
 			}
 		}
-		// Convert transpose values to table indices
+		// Convert transpose values to relative table indices (0-15)
 		for ch := 0; ch < 3; ch++ {
 			for i := 0; i < numOrders; i++ {
 				off := transposeOffsets[ch] + i
 				val := int8(convertedSongs[songNum-1][off])
-				idx, ok := transposeToIdx[val]
+				idx, ok := transposeToRelIdx[songNum-1][val]
 				if !ok {
-					fmt.Printf("WARNING: Song %d ch%d order %d: transpose %d (raw byte %d) not in table\n", songNum, ch, i, val, convertedSongs[songNum-1][off])
+					fmt.Printf("WARNING: Song %d ch%d order %d: transpose %d not in window\n", songNum, ch, i, val)
 					idx = 0
 				}
 				convertedSongs[songNum-1][off] = idx
