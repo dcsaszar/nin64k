@@ -372,14 +372,6 @@ func writeDeltaTableInc(result DeltaTableResult, path string) error {
 		}
 		buf.WriteString(fmt.Sprintf("\t; %d\n", i))
 	}
-	buf.WriteString("\n; Song delta bases (9 bytes)\n")
-	buf.WriteString("song_delta_bases:\n\t.byte\t")
-	for i := 0; i < 9; i++ {
-		buf.WriteString(fmt.Sprintf("%d", result.Bases[i]))
-		if i < 8 {
-			buf.WriteString(", ")
-		}
-	}
 	buf.WriteString(fmt.Sprintf("\n\nTRACKPTR_START = %d\n\n", result.StartConst))
 	return os.WriteFile(path, buf.Bytes(), 0644)
 }
@@ -2375,9 +2367,9 @@ func convertToNewFormat(raw []byte, songNum int, effectRemap [16]byte, fSubRemap
 	if filterGapSize < 0 {
 		filterGapSize = 0
 	}
-	// Gap 2: after arp, before dict
+	// Gap 2: after arp, before reserved byte at 0x98F (dict starts at 0x990)
 	arpGapStart := arpOff + newArpSize
-	arpGapSize := rowDictOff - arpGapStart
+	arpGapSize := 0x98F - arpGapStart // Exclude reserved byte
 	if arpGapSize < 0 {
 		arpGapSize = 0
 	}
@@ -2723,6 +2715,7 @@ func convertToNewFormat(raw []byte, songNum int, effectRemap [16]byte, fSubRemap
 	// Copy deduplicated tables (wavetable is global in player)
 	copy(out[filterOff:], newFilterTable)
 	copy(out[arpOff:], newArpTable)
+	// Note: reserved byte at 0x98F is filled with delta base after delta table is computed
 
 
 
@@ -5365,18 +5358,6 @@ func main() {
 		fmt.Printf("Error creating parts directory: %v\n", err)
 		os.Exit(1)
 	}
-	for songNum := 1; songNum <= 9; songNum++ {
-		if convertedSongs[songNum-1] == nil {
-			continue
-		}
-		partPath := filepath.Join(partsDir, fmt.Sprintf("part%d.bin", songNum))
-		if err := os.WriteFile(partPath, convertedSongs[songNum-1], 0644); err != nil {
-			fmt.Printf("Error writing %s: %v\n", partPath, err)
-			os.Exit(1)
-		}
-	}
-	fmt.Printf("Wrote %d parts to %s\n", 9, partsDir)
-
 	// Generate global delta table
 	// First collect regular deltas and track starts
 	var baseDeltaSets [9][]int
@@ -5522,6 +5503,7 @@ func main() {
 	} else {
 		fmt.Printf("Delta table: %d bytes -> %s\n", len(deltaResult.Table), deltaTablePath)
 	}
+
 
 	// Analyze row dict combinations across all songs
 	var totalCombos [8]int
@@ -5754,6 +5736,19 @@ func main() {
 		}
 		if worstGapVal > 0 {
 			fmt.Printf("\nSlowest checkpoint: %s cycles (from $%04X to $%04X)\n", commas(worstGapVal), worstGapFrom, worstGapTo)
+		}
+
+		// Write parts with delta base in reserved byte at 0x98F
+		for songNum := 1; songNum <= 9; songNum++ {
+			if convertedSongs[songNum-1] == nil {
+				continue
+			}
+			convertedSongs[songNum-1][0x98F] = byte(deltaResult.Bases[songNum-1])
+			partPath := filepath.Join(partsDir, fmt.Sprintf("part%d.bin", songNum))
+			if err := os.WriteFile(partPath, convertedSongs[songNum-1], 0644); err != nil {
+				fmt.Printf("Error writing %s: %v\n", partPath, err)
+				os.Exit(1)
+			}
 		}
 
 	} else {

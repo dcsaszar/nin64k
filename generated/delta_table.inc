@@ -11,9 +11,6 @@ delta_table:
 	.byte	$03, $05, $08, $0A, $0B, $1E, $06, $26, $36, $F6, $F7, $F9, $FA, $FB, $FC, $FF	; 96
 	.byte	$00, $01, $09, $0C, $23	; 112
 
-; Song delta bases (9 bytes)
-song_delta_bases:
-	.byte	85, 0, 61, 18, 56, 35, 71, 70, 73
 
 TRACKPTR_START = 21
 

@@ -32,7 +32,7 @@ zp_dict2         = $20          ; 2 bytes: dict2 (param bytes)
 ;       Virtual base is $5F0, so inst N is at $5F0 + N*16
 ; $7F0: Filtertable (227 bytes max)
 ; $8D3: Arptable (188 bytes max)
-; $98F: 1 byte reserved
+; $98F: Delta base (1 byte) - index into delta_table for trackptr decoding
 ; $990: Row dict0 (365 bytes) - note bytes
 ; $AFD: Row dict1 (365 bytes) - inst|effect bytes
 ; $C6A: Row dict2 (365 bytes) - param bytes
