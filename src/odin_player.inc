@@ -1050,8 +1050,8 @@ check_hardrestart:
 ; ============================================================================
 
 ; get_transpose_order - Get transpose for channel Y at order X
-; Returns: A = transpose value
-; Transpose tables at page-aligned offsets: ch0=$200, ch1=$300, ch2=$400
+; Returns: A = transpose value (from transpose_table lookup)
+; Transpose tables store indices into transpose_table
 get_transpose_order:
         lda     transpose_page,y
         sta     zp_ptr+1
@@ -1059,7 +1059,9 @@ get_transpose_order:
         sta     zp_ptr
         txa
         tay
-        lda     (zp_ptr),y
+        lda     (zp_ptr),y          ; load index
+        tay
+        lda     transpose_table,y   ; look up actual transpose value
         rts
 
 ; get_trackptr_order - Get pattern index for channel Y at order X
@@ -1490,5 +1492,5 @@ freqtable_hi:
 ; Global wavetable (shared across all songs)
 .include "../generated/wavetable.inc"
 
-; Delta table for pattern index encoding
-.include "../generated/delta_table.inc"
+; Lookup tables for delta and transpose encoding
+.include "../generated/tables.inc"

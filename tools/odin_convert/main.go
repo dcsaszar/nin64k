@@ -349,19 +349,21 @@ func solveDeltaTable(songSets [9][]int) DeltaTableResult {
 	return bestResult
 }
 
-func writeDeltaTableInc(result DeltaTableResult, path string) error {
+func writeTablesInc(deltaResult DeltaTableResult, transposeResult TransposeTableResult, path string) error {
 	var buf bytes.Buffer
-	buf.WriteString("; Auto-generated delta table - DO NOT EDIT\n")
-	buf.WriteString(fmt.Sprintf("; %d bytes\n\n", len(result.Table)))
+	buf.WriteString("; Auto-generated lookup tables - DO NOT EDIT\n\n")
+
+	// Write delta table
+	buf.WriteString(fmt.Sprintf("; Delta table: %d bytes\n", len(deltaResult.Table)))
 	buf.WriteString("delta_table:\n")
-	for i := 0; i < len(result.Table); i += 16 {
+	for i := 0; i < len(deltaResult.Table); i += 16 {
 		buf.WriteString("\t.byte\t")
 		end := i + 16
-		if end > len(result.Table) {
-			end = len(result.Table)
+		if end > len(deltaResult.Table) {
+			end = len(deltaResult.Table)
 		}
 		for j := i; j < end; j++ {
-			v := result.Table[j]
+			v := deltaResult.Table[j]
 			if v == deltaEmpty {
 				v = 0
 			}
@@ -372,7 +374,26 @@ func writeDeltaTableInc(result DeltaTableResult, path string) error {
 		}
 		buf.WriteString(fmt.Sprintf("\t; %d\n", i))
 	}
-	buf.WriteString(fmt.Sprintf("\n\nTRACKPTR_START = %d\n\n", result.StartConst))
+	buf.WriteString(fmt.Sprintf("\nTRACKPTR_START = %d\n\n", deltaResult.StartConst))
+
+	// Write transpose table
+	buf.WriteString(fmt.Sprintf("; Transpose table: %d bytes\n", len(transposeResult.Table)))
+	buf.WriteString("transpose_table:\n")
+	for i := 0; i < len(transposeResult.Table); i += 16 {
+		buf.WriteString("\t.byte\t")
+		end := i + 16
+		if end > len(transposeResult.Table) {
+			end = len(transposeResult.Table)
+		}
+		for j := i; j < end; j++ {
+			buf.WriteString(fmt.Sprintf("$%02X", byte(transposeResult.Table[j])))
+			if j < end-1 {
+				buf.WriteString(", ")
+			}
+		}
+		buf.WriteString(fmt.Sprintf("\t; %d\n", i))
+	}
+
 	return os.WriteFile(path, buf.Bytes(), 0644)
 }
 
@@ -396,6 +417,58 @@ func verifyDeltaTable(result DeltaTableResult) bool {
 	}
 	return true
 }
+
+// Transpose table solver - simpler than delta table since values are sparse
+type TransposeTableResult struct {
+	Table []int8   // All unique transpose values
+	Bases [9]int   // Per-song offset into table
+}
+
+func solveTransposeTable(songSets [9][]int8) TransposeTableResult {
+	// Collect all unique values across all songs
+	allUnique := make(map[int8]bool)
+	for _, set := range songSets {
+		for _, v := range set {
+			allUnique[v] = true
+		}
+	}
+
+	// Sort all values
+	table := make([]int8, 0, len(allUnique))
+	for v := range allUnique {
+		table = append(table, v)
+	}
+	sort.Slice(table, func(i, j int) bool { return table[i] < table[j] })
+
+	// Build value to index map
+	valToIdx := make(map[int8]int)
+	for i, v := range table {
+		valToIdx[v] = i
+	}
+
+	// Find best base for each song (minimize max index needed)
+	var bases [9]int
+	for songIdx, set := range songSets {
+		if len(set) == 0 {
+			continue
+		}
+		// Find min and max indices for this song's values
+		minIdx, maxIdx := len(table), 0
+		for _, v := range set {
+			idx := valToIdx[v]
+			if idx < minIdx {
+				minIdx = idx
+			}
+			if idx > maxIdx {
+				maxIdx = idx
+			}
+		}
+		bases[songIdx] = minIdx
+	}
+
+	return TransposeTableResult{Table: table, Bases: bases}
+}
+
 
 func init() {
 	projectRoot = findProjectRoot()
@@ -5497,13 +5570,43 @@ func main() {
 	if !verifyDeltaTable(deltaResult) {
 		fmt.Println("WARNING: Delta table verification failed!")
 	}
-	deltaTablePath := projectPath("generated/delta_table.inc")
-	if err := writeDeltaTableInc(deltaResult, deltaTablePath); err != nil {
-		fmt.Printf("Error writing delta table: %v\n", err)
+
+	// Collect transpose values from each song and build transpose table
+	var transposeSets [9][]int8
+	for songNum := 1; songNum <= 9; songNum++ {
+		if convertedSongs[songNum-1] == nil {
+			continue
+		}
+		numOrders := convertedStats[songNum-1].NewOrders
+		unique := make(map[int8]bool)
+		for order := 0; order < numOrders; order++ {
+			for ch := 0; ch < 3; ch++ {
+				t := int8(convertedSongs[songNum-1][ch*0x100+order])
+				unique[t] = true
+			}
+		}
+		set := make([]int8, 0, len(unique))
+		for v := range unique {
+			set = append(set, v)
+		}
+		transposeSets[songNum-1] = set
+	}
+	transposeResult := solveTransposeTable(transposeSets)
+
+	// Write combined tables file
+	tablesPath := projectPath("generated/tables.inc")
+	if err := writeTablesInc(deltaResult, transposeResult, tablesPath); err != nil {
+		fmt.Printf("Error writing tables: %v\n", err)
 	} else {
-		fmt.Printf("Delta table: %d bytes -> %s\n", len(deltaResult.Table), deltaTablePath)
+		fmt.Printf("Tables: delta=%d + transpose=%d bytes -> %s\n",
+			len(deltaResult.Table), len(transposeResult.Table), tablesPath)
 	}
 
+	// Build transpose value -> index map
+	transposeToIdx := make(map[int8]byte)
+	for i, v := range transposeResult.Table {
+		transposeToIdx[v] = byte(i)
+	}
 
 	// Analyze row dict combinations across all songs
 	var totalCombos [8]int
@@ -5541,12 +5644,14 @@ func main() {
 	}
 
 	// Convert trackptr tables from absolute to delta table indices (must happen before tests)
+	// Also convert transpose tables to indices
 	trackptrOffsets := []int{0x300, 0x400, 0x500}
+	transposeOffsets := []int{0x000, 0x100, 0x200}
 	for songNum := 1; songNum <= 9; songNum++ {
 		if convertedSongs[songNum-1] == nil {
 			continue
 		}
-		// Set delta base in reserved byte at 0x98F
+		// Set delta base at 0x98F (transpose uses absolute indices, no base needed)
 		convertedSongs[songNum-1][0x98F] = byte(deltaResult.Bases[songNum-1])
 		// Convert absolute trackptr values to delta table indices
 		numOrders := convertedStats[songNum-1].NewOrders
@@ -5563,6 +5668,19 @@ func main() {
 				}
 				convertedSongs[songNum-1][off] = idx
 				prev = curr
+			}
+		}
+		// Convert transpose values to table indices
+		for ch := 0; ch < 3; ch++ {
+			for i := 0; i < numOrders; i++ {
+				off := transposeOffsets[ch] + i
+				val := int8(convertedSongs[songNum-1][off])
+				idx, ok := transposeToIdx[val]
+				if !ok {
+					fmt.Printf("WARNING: Song %d ch%d order %d: transpose %d (raw byte %d) not in table\n", songNum, ch, i, val, convertedSongs[songNum-1][off])
+					idx = 0
+				}
+				convertedSongs[songNum-1][off] = idx
 			}
 		}
 	}
