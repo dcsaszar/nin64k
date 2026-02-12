@@ -1301,7 +1301,9 @@ func getPatternBreakInfo(pat []byte) (breakRow int, jumpTarget int) {
 	return 64, -1
 }
 
-// remapPatternPositionJumps rewrites position jump targets using the order mapping
+// remapPatternPositionJumps rewrites position jump targets using the order mapping.
+// Since trackptrs are now in playback order, all jumps point to the next sequential order,
+// making them redundant (but we keep them for compatibility with bit packing constraints).
 func remapPatternPositionJumps(pat []byte, orderMap map[int]int) {
 	for row := 0; row < 64; row++ {
 		rowOff := row * 3
@@ -1317,27 +1319,34 @@ func remapPatternPositionJumps(pat []byte, orderMap map[int]int) {
 	}
 }
 
-// findReachableOrders finds all orders reachable from startOrder using transitive closure
-// Uses cross-channel analysis: only follows jumps that execute before any channel breaks
-// Returns: ordered list of reachable order indices, and a map from old order to new order
+// findReachableOrders finds all orders reachable from startOrder by following playback sequence.
+// Uses cross-channel analysis: only follows jumps that execute before any channel breaks.
+// Returns: ordered list in PLAYBACK sequence (following jumps), and a map from old order to new order.
 func findReachableOrders(raw []byte, baseAddr, startOrder, numOrders int,
 	trackLoOff, trackHiOff []int) ([]int, map[int]int) {
 
 	rawLen := len(raw)
 
-	// Find reachable orders using BFS with cross-channel break analysis
-	reachable := make(map[int]bool)
-	queue := []int{startOrder}
-	reachable[startOrder] = true
+	// Follow playback sequence until we revisit an order (loop) or reach end
+	visited := make(map[int]bool)
+	var orders []int
+	order := startOrder
 
-	for len(queue) > 0 {
-		order := queue[0]
-		queue = queue[1:]
+	for len(orders) < 512 { // safety limit
+		if visited[order] {
+			break // loop detected, stop
+		}
+		visited[order] = true
+		orders = append(orders, order)
 
 		// Get break info for all 3 channels at this order
 		var breakRow [3]int
 		var jumpTarget [3]int
 		for ch := 0; ch < 3; ch++ {
+			if trackLoOff[ch]+order >= rawLen || trackHiOff[ch]+order >= rawLen {
+				breakRow[ch], jumpTarget[ch] = 64, -1
+				continue
+			}
 			lo := raw[trackLoOff[ch]+order]
 			hi := raw[trackHiOff[ch]+order]
 			addr := uint16(lo) | uint16(hi)<<8
@@ -1357,41 +1366,21 @@ func findReachableOrders(raw []byte, baseAddr, startOrder, numOrders int,
 			}
 		}
 
-		// Follow position jumps only from channels whose break is at the minimum row
-		hasJump := false
+		// Determine next order: follow position jump if present, else sequential
+		nextOrder := -1
 		for ch := 0; ch < 3; ch++ {
 			if breakRow[ch] == minBreak && jumpTarget[ch] >= 0 {
-				target := jumpTarget[ch]
-				if target < numOrders && !reachable[target] {
-					reachable[target] = true
-					queue = append(queue, target)
-				}
-				hasJump = true
+				nextOrder = jumpTarget[ch]
+				break
 			}
 		}
-
-		// If no position jump at minBreak, next order is reachable
-		if !hasJump {
-			nextOrder := order + 1
-			if nextOrder < numOrders && !reachable[nextOrder] {
-				reachable[nextOrder] = true
-				queue = append(queue, nextOrder)
-			}
+		if nextOrder < 0 {
+			nextOrder = order + 1
 		}
-	}
-
-	// Build ordered list: startOrder first, then sequential from start,
-	// followed by any earlier orders reached via position jumps
-	var orders []int
-	for order := startOrder; order < numOrders; order++ {
-		if reachable[order] {
-			orders = append(orders, order)
+		if nextOrder >= numOrders {
+			break // song ends
 		}
-	}
-	for order := 0; order < startOrder; order++ {
-		if reachable[order] {
-			orders = append(orders, order)
-		}
+		order = nextOrder
 	}
 
 	orderMap := make(map[int]int)
