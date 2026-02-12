@@ -1917,8 +1917,8 @@ func convertToNewFormat(raw []byte, songNum int, effectRemap [16]byte, fSubRemap
 	newInstOff := 0x600    // Instruments 1-31 start here (inst 0 not stored)
 	filterOff := 0x7F0     // Filter at $7F0 (227 bytes max)
 	arpOff := 0x8D3        // Arp at $8D3 (188 bytes max)
-	rowDictOff := 0x98F    // Row dict0 (notes), dict1 at +365, dict2 at +730
-	packedPtrsOff := 0xDD6 // Packed pointers (fixed location)
+	rowDictOff := 0x990    // Row dict0 (notes), dict1 at +365, dict2 at +730 (1 byte gap after arp)
+	packedPtrsOff := 0xDD7 // Packed pointers (fixed location)
 
 	// Extract patterns to slice for packing (do effect/order remapping first)
 	patternData := make([][]byte, numPatterns)
