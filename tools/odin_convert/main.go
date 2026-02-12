@@ -5534,6 +5534,39 @@ func main() {
 		}
 	}
 
+	// Build delta value -> index lookup
+	deltaToIndex := make(map[int8]byte)
+	for i, d := range deltaResult.Table {
+		deltaToIndex[d] = byte(i)
+	}
+
+	// Convert trackptr tables from absolute to delta table indices (must happen before tests)
+	trackptrOffsets := []int{0x300, 0x400, 0x500}
+	for songNum := 1; songNum <= 9; songNum++ {
+		if convertedSongs[songNum-1] == nil {
+			continue
+		}
+		// Set delta base in reserved byte at 0x98F
+		convertedSongs[songNum-1][0x98F] = byte(deltaResult.Bases[songNum-1])
+		// Convert absolute trackptr values to delta table indices
+		numOrders := convertedStats[songNum-1].NewOrders
+		for ch := 0; ch < 3; ch++ {
+			prev := bestConst // TRACKPTR_START
+			for i := 0; i < numOrders; i++ {
+				off := trackptrOffsets[ch] + i
+				curr := int(convertedSongs[songNum-1][off])
+				delta := int8(curr - prev)
+				idx, ok := deltaToIndex[delta]
+				if !ok {
+					fmt.Printf("WARNING: Song %d ch%d order %d: delta %d not in table\n", songNum, ch, i, delta)
+					idx = 0
+				}
+				convertedSongs[songNum-1][off] = idx
+				prev = curr
+			}
+		}
+	}
+
 	// Second pass: run tests
 	fmt.Println("=== Test Results ===")
 	var wg sync.WaitGroup
@@ -5738,12 +5771,11 @@ func main() {
 			fmt.Printf("\nSlowest checkpoint: %s cycles (from $%04X to $%04X)\n", commas(worstGapVal), worstGapFrom, worstGapTo)
 		}
 
-		// Write parts with delta base in reserved byte at 0x98F
+		// Write parts (delta encoding already applied before tests)
 		for songNum := 1; songNum <= 9; songNum++ {
 			if convertedSongs[songNum-1] == nil {
 				continue
 			}
-			convertedSongs[songNum-1][0x98F] = byte(deltaResult.Bases[songNum-1])
 			partPath := filepath.Join(partsDir, fmt.Sprintf("part%d.bin", songNum))
 			if err := os.WriteFile(partPath, convertedSongs[songNum-1], 0644); err != nil {
 				fmt.Printf("Error writing %s: %v\n", partPath, err)

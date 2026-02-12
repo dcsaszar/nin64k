@@ -108,10 +108,13 @@ player_init:
         ; Calculate trackptr table pages ($300, $400, $500 from base)
         inx                             ; X = base + 3
         stx     trackptr_page+0
+        stx     upd_tp_ch0+1            ; SMC: patch high byte
         inx                             ; X = base + 4
         stx     trackptr_page+1
+        stx     upd_tp_ch1+1            ; SMC: patch high byte
         inx                             ; X = base + 5
         stx     trackptr_page+2
+        stx     upd_tp_ch2+1            ; SMC: patch high byte
         ; Patch table addresses (SMC)
         inx
         inx                             ; X = base + 7
@@ -166,6 +169,12 @@ player_init:
         sta     chn_decoded_row+0
         sta     chn_decoded_row+1
         sta     chn_decoded_row+2
+        ; Initialize trackptr accumulators to TRACKPTR_START
+        ; (delta[0] will be added when newpattern runs on first frame)
+        lda     #TRACKPTR_START
+        sta     chn_trackptr_cur+0
+        sta     chn_trackptr_cur+1
+        sta     chn_trackptr_cur+2
         jsr     checkpoint
         ; Set up split dictionary pointers (3 arrays of ROW_DICT_SIZE bytes each)
         ; dict0 (notes) at ROW_DICT_OFF
@@ -274,19 +283,43 @@ player_play:
         lda     #$00
         sta     speedcounter
         lda     forcenewpattern
-        bmi     @newpattern
+        bmi     newpattern
         inc     trackrow
         lda     trackrow
         asl     a
-        bpl     @pattern_ok
-@newpattern:
+        bpl     pattern_ok
+newpattern:
         lda     nextordernumber
         sta     ordernumber
         inc     nextordernumber
+        ; Update trackptr: cur += delta_table[song_index[ordernumber]]
+        tay                             ; Y = ordernumber
+upd_tp_ch0 = *+1
+        lda     $FF00,y                 ; SMC: patched during init
+        tax
+        lda     delta_table,x
+        clc
+        adc     chn_trackptr_cur+0
+        sta     chn_trackptr_cur+0
+        jsr     checkpoint
+upd_tp_ch1 = *+1
+        lda     $FF00,y                 ; SMC: patched during init
+        tax
+        lda     delta_table,x
+        clc
+        adc     chn_trackptr_cur+1
+        sta     chn_trackptr_cur+1
+upd_tp_ch2 = *+1
+        lda     $FF00,y                 ; SMC: patched during init
+        tax
+        lda     delta_table,x
+        clc
+        adc     chn_trackptr_cur+2
+        sta     chn_trackptr_cur+2
         lda     #$00
         sta     trackrow
         sta     forcenewpattern
-@pattern_ok:
+pattern_ok:
         lda     trackrow
         sta     decode_row
         ; Check if prefetch is valid
@@ -1029,20 +1062,30 @@ get_transpose_order:
         lda     (zp_ptr),y
         rts
 
-; get_trackptr_order - Set zp_trackptr for channel Y at order X
-; Trackptr tables at page-aligned offsets: ch0=$500, ch1=$600, ch2=$700
-; Uses streaming row-by-row decode: decodes single row into buffer
+; get_trackptr_order - Get pattern index for channel Y at order X
+; cur holds trackptr for ordernumber; next is computed as cur + delta_table[index]
 get_trackptr_order:
-        ; Save channel
         sty     gto_channel+1       ; SMC: save channel
-        ; Get pattern index from page-aligned table
+        cpx     ordernumber
+        beq     @use_cur
+        ; X = nextordernumber: compute cur + delta_table[song_index]
         lda     trackptr_page,y
         sta     zp_ptr+1
         lda     #0
         sta     zp_ptr
         txa
-        tay
-        lda     (zp_ptr),y          ; A = pattern index
+        tay                         ; Y = order
+        lda     (zp_ptr),y          ; load delta index from song
+        tax
+        lda     delta_table,x       ; look up actual delta
+        ldy     gto_channel+1       ; restore Y = channel
+        clc
+        adc     chn_trackptr_cur,y
+        jmp     gto_have_pattern
+@use_cur:
+        lda     chn_trackptr_cur,y
+gto_have_pattern:
+        sta     chn_trackptr_tmp    ; save pattern index for gto_need_decode
 gto_channel:
         ldx     #0                  ; SMC: channel
         ; Check if this exact row is already decoded
@@ -1062,7 +1105,7 @@ gto_channel:
 gto_need_decode:
         ; Different pattern or non-sequential - restart from row 0
         jsr     checkpoint
-        lda     (zp_ptr),y          ; re-read pattern index
+        lda     chn_trackptr_tmp    ; get pattern index saved by get_trackptr_order
         sta     chn_decoded_pat,x
         ; Load gap code from packed pointer bits 13-15
         asl     a                   ; pattern index * 2
@@ -1357,6 +1400,10 @@ prefetch_transpose:     .byte   0, 0, 0 ; cached transpose values
 
 PLAYERVARSSIZE = * - chn_hardrestart
 
+; Trackptr delta decoding state
+chn_trackptr_cur:       .byte   0, 0, 0        ; Pattern index for current ordernumber
+chn_trackptr_tmp:       .byte   0              ; Temp storage for get_trackptr_order
+
 ; Values computed from song base during init
 transpose_page:         .byte   0, 0, 0
 trackptr_page:          .byte   0, 0, 0
@@ -1442,3 +1489,6 @@ freqtable_hi:
 
 ; Global wavetable (shared across all songs)
 .include "../generated/wavetable.inc"
+
+; Delta table for pattern index encoding
+.include "../generated/delta_table.inc"
