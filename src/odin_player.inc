@@ -70,8 +70,8 @@ zp_dict2         = $20          ; 2 bytes: dict2 (param bytes)
 
 ; Pattern packing constants
 ROW_DICT_OFF        = $78D
-ROW_DICT_SIZE       = 365
-PACKED_PTRS_OFF     = $BD4          ; Pointers are absolute song-base offsets
+ROW_DICT_SIZE       = 365           ; Max needed with equiv mapping (song 5 = 366 entries, 000000 implicit)
+PACKED_PTRS_OFF     = $BD4          ; = $78D + 365*3, pointers are absolute song-base offsets
 
 ; Instrument parameter offsets within 16-byte instrument block
 INST_AD          = 0
@@ -137,6 +137,7 @@ player_init:
         ; Initialize playback state (always start at order 0)
         lda     #$80
         sta     forcenewpattern
+        ; gateon will be set properly on first note trigger
         ldy     #6
         sty     speed
         dey
@@ -696,7 +697,7 @@ fx_haseffect:
         sta     chn_sr,x
         jmp     do_slide_vib
 @fx_7:
-        ; Effect 7 = set waveform (inlined)
+        ; Effect 7 = set waveform (every frame)
         lda     chn_effectpar,x
         sta     chn_waveform,x
         jmp     do_slide_vib
@@ -1048,6 +1049,7 @@ check_hardrestart:
         cmp     #$40              ; tone portamento (new effect 2 = bits 0-2 = 2 = 0x40 >> 5)
         beq     @done
 @do_hr:
+        ; Zero waveform, AD, SR for hard restart
         lda     #$00
         sta     chn_waveform,x
         sta     chn_ad,x

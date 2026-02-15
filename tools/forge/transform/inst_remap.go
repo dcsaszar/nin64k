@@ -80,16 +80,15 @@ func buildInstRemap(anal analysis.SongAnalysis, numInst int) ([]int, int) {
 			remap[i] = nextSlot
 			slotUsed[nextSlot] = true
 			nextSlot++
-		} else {
-			remap[i] = nextSlot
-			nextSlot++
 		}
 	}
 
 	maxUsedSlot := 0
 	for i := 1; i < numInst; i++ {
-		if anal.InstrumentFreq[i] > 0 && remap[i] > maxUsedSlot {
-			maxUsedSlot = remap[i]
+		if count, ok := anal.InstrumentFreq[i]; ok && count > 0 {
+			if remap[i] > maxUsedSlot {
+				maxUsedSlot = remap[i]
+			}
 		}
 	}
 

@@ -37,11 +37,16 @@ func calculatePatternGap(pat []byte, truncateAfter int) int {
 }
 
 func packPatterns(patterns [][]byte, dict []byte, rowToIdx map[string]int, truncateLimits []int) ([][]byte, []byte, int, int) {
+	return packPatternsWithEquiv(patterns, dict, rowToIdx, truncateLimits, nil)
+}
+
+func packPatternsWithEquiv(patterns [][]byte, dict []byte, rowToIdx map[string]int, truncateLimits []int, equivMap map[int]int) ([][]byte, []byte, int, int) {
 	const primaryMax = 224
 	const rleMax = 16
 	const rleBase = 0xEF
 	const extMarker = 0xFF
 	const dictZeroRleMax = 15
+	const dictOffsetBase = 0x10
 
 	numEntries := len(dict) / 3
 	patternPacked := make([][]byte, len(patterns))
@@ -90,10 +95,17 @@ func packPatterns(patterns [][]byte, dict []byte, rowToIdx map[string]int, trunc
 			repeatCount = 0
 		}
 
-		for slot := 0; slot*spacing < truncateAfter; slot++ {
+		// Encode all slots (64/spacing) to ensure decoder can access any row
+		// For rows beyond truncation, emit zeros
+		numSlots := 64 / spacing
+		for slot := 0; slot < numSlots; slot++ {
 			row := slot * spacing
-			off := row * 3
-			curRow := [3]byte{pat[off], pat[off+1], pat[off+2]}
+			var curRow [3]byte
+			if row < truncateAfter {
+				off := row * 3
+				curRow = [3]byte{pat[off], pat[off+1], pat[off+2]}
+			}
+			// curRow is already [0,0,0] for rows beyond truncation
 
 			if curRow == prevRow {
 				repeatCount++
@@ -117,13 +129,19 @@ func packPatterns(patterns [][]byte, dict []byte, rowToIdx map[string]int, trunc
 					}
 				}
 
+				if equivMap != nil {
+					if mappedIdx, ok := equivMap[idx]; ok {
+						idx = mappedIdx
+					}
+				}
+
 				if idx < primaryMax {
 					if idx == 0 {
 						lastDictZeroPos = len(patPacked)
 						patPacked = append(patPacked, 0)
 						lastWasDictZero = true
 					} else {
-						patPacked = append(patPacked, byte(idx))
+						patPacked = append(patPacked, byte(dictOffsetBase+idx-1))
 						lastWasDictZero = false
 					}
 					primaryCount++
@@ -143,39 +161,132 @@ func packPatterns(patterns [][]byte, dict []byte, rowToIdx map[string]int, trunc
 	return patternPacked, gapCodes, primaryCount, extendedCount
 }
 
-func optimizeOverlap(patterns [][]byte) []byte {
-	if len(patterns) == 0 {
-		return nil
+func optimizeOverlap(patterns [][]byte) ([]byte, []uint16) {
+	n := len(patterns)
+	if n == 0 {
+		return nil, nil
 	}
 
-	var packed []byte
-	packed = append(packed, patterns[0]...)
-
-	for i := 1; i < len(patterns); i++ {
-		pat := patterns[i]
-		bestOverlap := 0
-
-		for overlap := len(pat); overlap > 0; overlap-- {
-			if overlap > len(packed) {
+	canonical := make([]int, n)
+	for i := range canonical {
+		canonical[i] = i
+	}
+	for i := 0; i < n; i++ {
+		if canonical[i] != i {
+			continue
+		}
+		for j := i + 1; j < n; j++ {
+			if canonical[j] != j {
 				continue
 			}
-			suffix := packed[len(packed)-overlap:]
-			prefix := pat[:overlap]
-			match := true
-			for j := 0; j < overlap; j++ {
-				if suffix[j] != prefix[j] {
-					match = false
-					break
-				}
+			if string(patterns[i]) == string(patterns[j]) {
+				canonical[j] = i
 			}
-			if match {
-				bestOverlap = overlap
-				break
+		}
+	}
+
+	var uniquePatterns [][]byte
+	origToUnique := make([]int, n)
+	for i := 0; i < n; i++ {
+		if canonical[i] == i {
+			origToUnique[i] = len(uniquePatterns)
+			uniquePatterns = append(uniquePatterns, patterns[i])
+		} else {
+			origToUnique[i] = -1
+		}
+	}
+	for i := 0; i < n; i++ {
+		if canonical[i] != i {
+			origToUnique[i] = origToUnique[canonical[i]]
+		}
+	}
+
+	numUnique := len(uniquePatterns)
+	if numUnique == 0 {
+		return nil, make([]uint16, n)
+	}
+
+	strings := make([][]byte, numUnique)
+	for i := range strings {
+		strings[i] = make([]byte, len(uniquePatterns[i]))
+		copy(strings[i], uniquePatterns[i])
+	}
+
+	patternOffset := make([]int, numUnique)
+	root := make([]int, numUnique)
+	for i := range root {
+		root[i] = i
+	}
+
+	for {
+		bestOverlap := 0
+		bestI, bestJ := -1, -1
+
+		for i := 0; i < numUnique; i++ {
+			if strings[i] == nil {
+				continue
+			}
+			for j := 0; j < numUnique; j++ {
+				if i == j || strings[j] == nil {
+					continue
+				}
+				si, sj := strings[i], strings[j]
+				maxLen := len(si)
+				if len(sj) < maxLen {
+					maxLen = len(sj)
+				}
+				for l := maxLen; l >= 1; l-- {
+					if string(si[len(si)-l:]) == string(sj[:l]) {
+						if l > bestOverlap {
+							bestOverlap = l
+							bestI, bestJ = i, j
+						}
+						break
+					}
+				}
 			}
 		}
 
-		packed = append(packed, pat[bestOverlap:]...)
+		if bestOverlap == 0 {
+			break
+		}
+
+		si := strings[bestI]
+		sj := strings[bestJ]
+		merged := make([]byte, len(si)+len(sj)-bestOverlap)
+		copy(merged, si)
+		copy(merged[len(si):], sj[bestOverlap:])
+		strings[bestI] = merged
+
+		offsetShift := len(si) - bestOverlap
+		for p := 0; p < numUnique; p++ {
+			if root[p] == bestJ {
+				root[p] = bestI
+				patternOffset[p] += offsetShift
+			}
+		}
+
+		strings[bestJ] = nil
 	}
 
-	return packed
+	var packed []byte
+	uniqueOffset := make([]int, numUnique)
+	for i := 0; i < numUnique; i++ {
+		if strings[i] != nil {
+			baseOffset := len(packed)
+			packed = append(packed, strings[i]...)
+			for p := 0; p < numUnique; p++ {
+				if root[p] == i {
+					uniqueOffset[p] = baseOffset + patternOffset[p]
+				}
+			}
+		}
+	}
+
+	offsets := make([]uint16, n)
+	for i := 0; i < n; i++ {
+		offsets[i] = uint16(uniqueOffset[origToUnique[i]])
+	}
+
+	return packed, offsets
 }

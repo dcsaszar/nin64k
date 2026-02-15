@@ -130,7 +130,9 @@ func computeTruncateLimits(song parse.ParsedSong, reachableOrders []int, raw []b
 			if addr == 0 {
 				continue
 			}
-			if existing, ok := limits[addr]; !ok || truncateAt < existing {
+			// Use MAX truncate limit across all usages - pattern might be used
+			// in orders with different break points, and we need all needed rows
+			if existing, ok := limits[addr]; !ok || truncateAt > existing {
 				limits[addr] = truncateAt
 			}
 		}

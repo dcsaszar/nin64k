@@ -5,6 +5,10 @@ import (
 )
 
 func encodeOrders(song transform.TransformedSong) ([3][]byte, [3][]byte, [3]byte) {
+	return encodeOrdersWithRemap(song, nil)
+}
+
+func encodeOrdersWithRemap(song transform.TransformedSong, reorderMap []int) ([3][]byte, [3][]byte, [3]byte) {
 	numOrders := len(song.Orders[0])
 	if numOrders == 0 {
 		return [3][]byte{}, [3][]byte{}, [3]byte{}
@@ -21,37 +25,68 @@ func encodeOrders(song transform.TransformedSong) ([3][]byte, [3][]byte, [3]byte
 
 	for ch := 0; ch < 3; ch++ {
 		if len(song.Orders[ch]) > 0 {
-			trackStarts[ch] = byte(song.Orders[ch][0].PatternIdx)
-		}
-
-		prevPtr := 0
-		if len(song.Orders[ch]) > 0 {
-			prevPtr = song.Orders[ch][0].PatternIdx
-		}
-		prevTranspose := int8(0)
-		if len(song.Orders[ch]) > 0 {
-			prevTranspose = song.Orders[ch][0].Transpose
+			patIdx := song.Orders[ch][0].PatternIdx
+			if reorderMap != nil && patIdx < len(reorderMap) {
+				patIdx = reorderMap[patIdx]
+			}
+			trackStarts[ch] = byte(patIdx)
 		}
 
 		for i, order := range song.Orders[ch] {
-			if i == 0 {
-				transpose[ch][i] = 0
-				trackptr[ch][i] = 0
-				continue
+			transpose[ch][i] = byte(order.Transpose)
+			patIdx := order.PatternIdx
+			if reorderMap != nil && patIdx < len(reorderMap) {
+				patIdx = reorderMap[patIdx]
 			}
-
-			transDelta := int(order.Transpose) - int(prevTranspose)
-			ptrDelta := order.PatternIdx - prevPtr
-
-			transpose[ch][i] = byte(transDelta) & 0x0F
-			trackptr[ch][i] = byte(ptrDelta) & 0x1F
-
-			prevTranspose = order.Transpose
-			prevPtr = order.PatternIdx
+			trackptr[ch][i] = byte(patIdx)
 		}
 	}
 
 	return transpose, trackptr, trackStarts
+}
+
+func ComputeDeltaSet(trackptr [3][]byte, numOrders int) []int {
+	seen := make(map[int]bool)
+
+	for ch := 0; ch < 3; ch++ {
+		limit := len(trackptr[ch])
+		if numOrders > 0 && numOrders < limit {
+			limit = numOrders
+		}
+		for i := 1; i < limit; i++ {
+			prev := int(trackptr[ch][i-1])
+			curr := int(trackptr[ch][i])
+			d := curr - prev
+			if d > 127 {
+				d -= 256
+			} else if d < -128 {
+				d += 256
+			}
+			seen[d] = true
+		}
+	}
+
+	result := make([]int, 0, len(seen))
+	for d := range seen {
+		result = append(result, d)
+	}
+	return result
+}
+
+func ComputeTransposeSet(transpose [3][]byte, numOrders int) []int8 {
+	seen := make(map[int8]bool)
+
+	for ch := 0; ch < 3; ch++ {
+		for i := 0; i < len(transpose[ch]) && i < numOrders; i++ {
+			seen[int8(transpose[ch][i])] = true
+		}
+	}
+
+	result := make([]int8, 0, len(seen))
+	for v := range seen {
+		result = append(result, v)
+	}
+	return result
 }
 
 func PackOrderBitstream(numOrders int, transpose [3][]byte, trackptr [3][]byte) []byte {

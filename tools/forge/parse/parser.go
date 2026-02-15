@@ -21,9 +21,11 @@ type Instrument struct {
 	AD, SR                             byte
 	WaveStart, WaveEnd, WaveLoop       byte
 	ArpStart, ArpEnd, ArpLoop          byte
-	PulseWidthLo, PulseWidthHi         byte
+	VibDelay                           byte
+	VibDepthSpeed                      byte
+	PulseWidth                         byte
 	PulseSpeed                         byte
-	VibDepthSpeed, VibDelay            byte
+	PulseLimits                        byte
 	FilterStart, FilterEnd, FilterLoop byte
 }
 
@@ -121,11 +123,11 @@ func parseInstruments(raw []byte, addrs TableAddresses) []Instrument {
 		inst.ArpStart = getParam(5)
 		inst.ArpEnd = getParam(6)
 		inst.ArpLoop = getParam(7)
-		inst.PulseWidthLo = getParam(8)
-		inst.PulseWidthHi = getParam(9)
-		inst.PulseSpeed = getParam(10)
-		inst.VibDepthSpeed = getParam(11)
-		inst.VibDelay = getParam(12)
+		inst.VibDelay = getParam(8)
+		inst.VibDepthSpeed = getParam(9)
+		inst.PulseWidth = getParam(10)
+		inst.PulseSpeed = getParam(11)
+		inst.PulseLimits = getParam(12)
 		inst.FilterStart = getParam(13)
 		inst.FilterEnd = getParam(14)
 		inst.FilterLoop = getParam(15)

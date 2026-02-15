@@ -21,9 +21,11 @@ type Instrument struct {
 	AD, SR                             byte
 	WaveStart, WaveEnd, WaveLoop       byte
 	ArpStart, ArpEnd, ArpLoop          byte
-	PulseWidthLo, PulseWidthHi         byte
+	VibDelay                           byte
+	VibDepthSpeed                      byte
+	PulseWidth                         byte
 	PulseSpeed                         byte
-	VibDepthSpeed, VibDelay            byte
+	PulseLimits                        byte
 	FilterStart, FilterEnd, FilterLoop byte
 }
 

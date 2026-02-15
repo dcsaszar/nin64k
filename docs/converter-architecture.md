@@ -6,10 +6,10 @@ The converter transforms tracker song data into an optimized format for the 6502
 
 ## Naming
 
-- **`forge`** (`tools/forge/`) - the new pipeline-based converter (target implementation)
-- **`odin_convert`** (`tools/odin_convert/`) - existing converter, kept as reference/oracle for VM comparison tests
+- **`forge`** (`tools/forge/`) - the pipeline-based converter (complete, all tests passing)
+- **`odin_convert`** (`tools/odin_convert/`) - legacy converter, kept as reference
 
-During development, `forge` output is validated against `odin_convert`. Once all VM tests pass, `odin_convert` can be retired.
+All 9 songs pass both VP (VirtualPlayer) and ASM (6502 emulator) validation.
 
 ## Design Principles
 
@@ -19,16 +19,15 @@ During development, `forge` output is validated against `odin_convert`. Once all
 4. **Testability**: Each stage can be tested in isolation
 5. **Cross-pattern awareness**: Analysis passes have access to full song context
 
-## Recommendation: Full Rewrite
+## Architecture Benefits
 
-The current converter (7000+ lines in a single file) has grown organically with features interleaved in complex ways. Key issues:
+The pipeline architecture addresses issues from the legacy converter:
 
-1. **Coupled data flows**: Pattern data is processed in multiple loops (patternData, allPatternData) that must stay in sync
-2. **Mutation**: Raw song data is mutated in place (transpose rewrites, pointer rewrites)
-3. **Order-dependent operations**: Effect remapping, transpose adjustment, and dictionary building must happen in a specific order that isn't explicit
-4. **Global state**: Many mappings and remaps are built incrementally and passed around
-
-A **full rewrite** (`forge`) with the pipeline architecture is recommended. The existing `odin_convert` serves as reference implementation and test oracle.
+1. **Explicit data flow**: Each stage has clearly defined input/output types
+2. **Immutability**: Stages produce new data structures rather than mutating inputs
+3. **Composability**: Stages can be tested and debugged in isolation
+4. **Verification**: Per-stage verifiers catch issues early
+5. **Dual validation**: Both Go emulators (VP) and 6502 ASM validate correctness
 
 ## Pipeline Stages
 
@@ -78,10 +77,18 @@ A **full rewrite** (`forge`) with the pipeline architecture is recommended. The 
 │  - Cross-channel truncation (earliest break row)                     │
 │  - Gap encoding for pattern storage                                  │
 │  - Overlap optimization for packed patterns                          │
-│  - Encode order lists as bitstream (transpose + trackptr deltas)     │
-│  - Delta table solving (optimal ordering)                            │
-│  - Transpose table building                                          │
-│  - Pack wave/arp/filter tables with deduplication                    │
+│  - Row equivalence canonicalization                                  │
+│  - Pattern deduplication and reordering                              │
+└─────────────────────────────────────────────────────────────────────┘
+                                   ↓
+┌─────────────────────────────────────────────────────────────────────┐
+│                          SOLVING                                     │
+├─────────────────────────────────────────────────────────────────────┤
+│  Cross-song optimization                                             │
+│  - Delta table solving (optimal ordering for trackptr deltas)        │
+│  - Transpose table solving (optimal ordering for transpose deltas)   │
+│  - Global wave table building (cross-song deduplication)             │
+│  - Order bitstream encoding (transpose + trackptr deltas)            │
 └─────────────────────────────────────────────────────────────────────┘
                                    ↓
 ┌─────────────────────────────────────────────────────────────────────┐
@@ -92,6 +99,27 @@ A **full rewrite** (`forge`) with the pipeline architecture is recommended. The 
 │  - Place patterns in gaps (inst gap, filter gap, arp gap, dict gaps) │
 │  - Write instrument data (16 params × N instruments)                 │
 │  - Generate final binary with all pointers resolved                  │
+└─────────────────────────────────────────────────────────────────────┘
+                                   ↓
+┌─────────────────────────────────────────────────────────────────────┐
+│                        VERIFICATION                                  │
+├─────────────────────────────────────────────────────────────────────┤
+│  Stage-by-stage integrity checks                                     │
+│  - Parse verification (valid addresses, ranges)                      │
+│  - Analysis verification (consistency checks)                        │
+│  - Transform verification (remap validity)                           │
+│  - Encode verification (dictionary bounds, pattern validity)         │
+│  - Serialize verification (gap bounds, offset validity)              │
+│  - Semantic verification (cross-stage consistency)                   │
+└─────────────────────────────────────────────────────────────────────┘
+                                   ↓
+┌─────────────────────────────────────────────────────────────────────┐
+│                        VALIDATION                                    │
+├─────────────────────────────────────────────────────────────────────┤
+│  Runtime correctness validation                                      │
+│  - VP validation: Go-based player emulator comparison                │
+│  - ASM validation: 6502 emulator running actual player code          │
+│  - SID write capture and comparison over N frames                    │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -175,11 +203,14 @@ The following features exist in `odin_convert` and must be implemented in `forge
 
 | Feature | Current Location | Description |
 |---------|------------------|-------------|
-| 6502 VM emulator | `CPU6502` type + methods | Full 6502 instruction set emulation |
+| 6502 VM emulator | `validate/vm.go` | Full 6502 instruction set emulation |
 | SID write capture | `RunFrames` | Capture all writes to $D400-$D41C |
-| VM comparison test | `testSong` | Compare SID writes: original song vs converted over N frames |
-| Delta table verification | `verifyDeltaTable` | Ensure all song deltas can be encoded |
-| Equiv validation | `runEquivValidate` | Validate cached row equivalences |
+| ASM comparison test | `validate/compare.go` | Compare SID writes via 6502 emulator |
+| VP original player | `validate/vplayer_orig.go` | Go emulator for original GT format |
+| VP converted player | `validate/vplayer.go` | Go emulator for converted format |
+| VP comparison test | `validate/compare.go` | Compare SID writes via Go emulators |
+| Stage verifiers | `verify/*.go` | Per-stage data integrity checks |
+| Semantic verifier | `verify/semantic.go` | Cross-stage consistency validation |
 
 ## Data Structures
 
@@ -341,58 +372,64 @@ tools/forge/
 │   ├── parser.go        # RawSongData → ParsedSong
 │   └── addresses.go     # Table address extraction from embedded player
 ├── analysis/
-│   ├── analysis.go      # Analysis pass infrastructure
-│   ├── effects.go       # Effect usage, F sub-effect splitting
-│   ├── patterns.go      # Reachability, break info
-│   ├── instruments.go   # Usage counts, filter trigger detection
-│   ├── arp_flow.go      # Cross-pattern arp tracking
-│   └── equivalence.go   # Row/pattern equivalence detection
+│   ├── analysis.go      # Analysis pass: effects, instruments, filter triggers
+│   └── patterns.go      # Pattern reachability, break info
 ├── transform/
-│   ├── transform.go     # Transform pass infrastructure
-│   ├── effect_remap.go  # Frequency-sorted effect remapping
+│   ├── transform.go     # Transform pass infrastructure, order pruning
+│   ├── effect_remap.go  # Frequency-sorted effect remapping (global)
 │   ├── inst_remap.go    # MFU packing with filter trigger constraint
-│   ├── transpose_equiv.go # Transpose-equivalent pattern handling
-│   ├── order_prune.go   # Reachable order pruning, jump remapping
-│   ├── pattern_index.go # Cuthill-McKee optimization
-│   ├── table_dedup.go   # Wave/arp/filter deduplication
-│   └── arp_repeat.go    # Arp repeat optimization (future)
+│   ├── transpose_equiv.go # Transpose-equivalent pattern detection
+│   ├── row_remap.go     # Row-level effect/inst/param remapping
+│   └── dedup.go         # Arp/filter table deduplication
 ├── encode/
-│   ├── encoder.go       # Encoding infrastructure
-│   ├── dictionary.go    # Row dictionary building
-│   ├── patterns.go      # Pattern packing with gaps
-│   ├── overlap.go       # Packed pattern overlap optimization
+│   ├── encoder.go       # Dictionary building, pattern packing, overlap
+│   ├── equiv.go         # Row equivalence canonicalization
+│   ├── patterns.go      # Pattern gap encoding
 │   ├── orders.go        # Order bitstream encoding
-│   └── delta.go         # Delta/transpose table solving
+│   └── reorder.go       # Pattern deduplication and reordering
+├── solve/
+│   ├── delta.go         # Delta table solving (optimal ordering)
+│   ├── transpose.go     # Transpose table solving
+│   └── wavetable.go     # Global wave table building (cross-song)
 ├── serialize/
-│   ├── layout.go        # Fixed offset constants
-│   ├── gaps.go          # Gap calculation and utilization
+│   ├── layout.go        # Fixed offset constants, gap calculations
 │   └── serializer.go    # Final binary assembly
 ├── validate/
 │   ├── vm.go            # 6502 emulator
-│   ├── compare.go       # VM comparison test
-│   └── verify.go        # Delta table verification
-└── global/
-    └── wavetable.go     # Cross-song global wave table
+│   ├── compare.go       # VP and ASM comparison tests
+│   ├── vplayer.go       # Go emulator for converted format
+│   └── vplayer_orig.go  # Go emulator for original GT format
+└── verify/
+    ├── verify.go        # Verification infrastructure
+    ├── parse.go         # Parse stage verification
+    ├── analysis.go      # Analysis stage verification
+    ├── transform.go     # Transform stage verification
+    ├── encode.go        # Encode stage verification
+    ├── solve.go         # Solve stage verification
+    ├── serialize.go     # Serialize stage verification
+    └── semantic.go      # Cross-stage semantic verification
 ```
 
-## Migration Strategy
+## Migration Status: Complete
 
-### Phase 1: Full Pipeline Implementation
+### Phase 1: Full Pipeline Implementation ✓
 
-Implement all stages together:
+All stages implemented:
 1. Types and parsing
 2. Analysis
 3. Transformation
 4. Encoding
-5. Serialization
+5. Solving (delta/transpose tables, global wave table)
+6. Serialization
+7. Verification (per-stage integrity checks)
 
-Reference `odin_convert` source for exact behavior. No intermediate tests - the clean pipeline architecture makes debugging tractable if issues arise.
+### Phase 2: Validation ✓
 
-### Phase 2: VM Comparison Test
+Dual validation approach:
+- **VP validation**: Go-based player emulators compare original vs converted format
+- **ASM validation**: 6502 emulator runs actual player code
 
-Run VM comparison: `forge` output vs original songs. If SID writes match across all songs, the implementation is correct. Migration complete.
-
-If mismatches occur, add targeted tests for the failing behavior, fix, repeat.
+All 9 songs pass both VP and ASM validation (100% SID write match).
 
 ## Example: Adding Arp Repeat
 

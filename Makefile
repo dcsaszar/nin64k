@@ -17,7 +17,7 @@ SID_FILE = build/Nine_Inch_Ninjas.sid
 
 INCLUDES = $(wildcard src/*.inc)
 
-.PHONY: all clean run selftest run-selftest sid test
+.PHONY: all clean run selftest run-selftest sid test forge compress
 
 all: $(PRG) $(SID_FILE)
 
@@ -63,6 +63,12 @@ $(SID_FILE): $(SID_OBJ) $(SID_CFG)
 test:
 	$(MAKE) -C tools/odin_convert
 	cd tools/odin_convert && ./bin/odin_convert
+
+forge:
+	cd tools/forge && go run .
+
+compress:
+	go run ./cmd/compress
 
 clean:
 	rm -rf build/*.o build/*.prg build/*.sid build/*.bin build/*.inc

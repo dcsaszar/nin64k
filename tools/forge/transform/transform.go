@@ -1,9 +1,10 @@
 package transform
 
 import (
+	"sort"
+
 	"forge/analysis"
 	"forge/parse"
-	"sort"
 )
 
 type TransformedRow struct {
@@ -43,14 +44,21 @@ type TransformedSong struct {
 }
 
 func Transform(song parse.ParsedSong, anal analysis.SongAnalysis, raw []byte) TransformedSong {
+	effectRemap, fSubRemap := BuildGlobalEffectRemap([]analysis.SongAnalysis{anal})
+	return TransformWithGlobalEffects(song, anal, raw, effectRemap, fSubRemap)
+}
+
+func TransformWithGlobalEffects(song parse.ParsedSong, anal analysis.SongAnalysis, raw []byte, effectRemap [16]byte, fSubRemap map[int]byte) TransformedSong {
 	result := TransformedSong{
 		PatternRemap:   make(map[uint16]uint16),
 		TransposeDelta: make(map[uint16]int),
 		OrderMap:       anal.OrderMap,
 	}
 
-	result.EffectRemap, result.FSubRemap = buildEffectRemap(anal)
-	result.InstRemap, result.MaxUsedSlot = buildInstRemap(anal, len(song.Instruments))
+	result.EffectRemap = effectRemap
+	result.FSubRemap = fSubRemap
+	numInst := len(song.Instruments)
+	result.InstRemap, result.MaxUsedSlot = buildInstRemap(anal, numInst)
 
 	canonicalPatterns, transposeDelta := findTransposeEquivalents(song, anal, raw)
 	result.TransposeDelta = transposeDelta
@@ -59,25 +67,26 @@ func Transform(song parse.ParsedSong, anal analysis.SongAnalysis, raw []byte) Tr
 		result.PatternRemap[addr] = canonical
 	}
 
-	var sortedCanonical []uint16
-	seen := make(map[uint16]bool)
+	// Collect unique canonical patterns and sort by address (matching odin_convert)
+	uniqueCanonical := make(map[uint16]bool)
 	for _, canonical := range canonicalPatterns {
-		if !seen[canonical] {
-			seen[canonical] = true
-			sortedCanonical = append(sortedCanonical, canonical)
-		}
+		uniqueCanonical[canonical] = true
 	}
-	sort.Slice(sortedCanonical, func(i, j int) bool {
-		return sortedCanonical[i] < sortedCanonical[j]
+	var sortedPatterns []uint16
+	for addr := range uniqueCanonical {
+		sortedPatterns = append(sortedPatterns, addr)
+	}
+	sort.Slice(sortedPatterns, func(i, j int) bool {
+		return sortedPatterns[i] < sortedPatterns[j]
 	})
-	result.PatternOrder = sortedCanonical
+	result.PatternOrder = sortedPatterns
 
 	addrToIdx := make(map[uint16]int)
-	for idx, addr := range sortedCanonical {
+	for idx, addr := range sortedPatterns {
 		addrToIdx[addr] = idx
 	}
 
-	for _, addr := range sortedCanonical {
+	for _, addr := range sortedPatterns {
 		pat := song.Patterns[addr]
 		truncateAt := 64
 		if limit, ok := anal.TruncateLimits[addr]; ok && limit < truncateAt {
@@ -95,11 +104,11 @@ func Transform(song parse.ParsedSong, anal analysis.SongAnalysis, raw []byte) Tr
 			r := pat.Rows[row]
 			newNote := r.Note
 			if newNote == 0x7F {
-				newNote = 0x67
+				newNote = 0x61 // Map original key-off ($7F) to new format key-off ($61)
 			}
 
 			newB0, newB1, newParam := remapRowBytes(
-				encodeB0(r.Note, r.Effect),
+				encodeB0(newNote, r.Effect), // Use remapped note
 				encodeB1(r.Inst, r.Effect),
 				r.Param,
 				result.EffectRemap,
@@ -134,10 +143,23 @@ func Transform(song parse.ParsedSong, anal analysis.SongAnalysis, raw []byte) Tr
 		}
 	}
 
-	result.Instruments = remapInstruments(song.Instruments, result.InstRemap, result.MaxUsedSlot)
 	result.WaveTable = song.WaveTable
-	result.ArpTable = song.ArpTable
-	result.FilterTable = song.FilterTable
+
+	newArpTable, arpRemap, arpValid := deduplicateArpTable(song.Instruments, song.ArpTable)
+	newFilterTable, filterRemap, filterValid := deduplicateFilterTable(song.Instruments, song.FilterTable)
+
+	remappedInstruments := make([]parse.Instrument, len(song.Instruments))
+	copy(remappedInstruments, song.Instruments)
+	if arpRemap != nil {
+		applyArpRemap(remappedInstruments, arpRemap, arpValid)
+	}
+	if filterRemap != nil {
+		applyFilterRemap(remappedInstruments, filterRemap, filterValid)
+	}
+
+	result.Instruments = remapInstruments(remappedInstruments, result.InstRemap, result.MaxUsedSlot)
+	result.ArpTable = newArpTable
+	result.FilterTable = newFilterTable
 
 	return result
 }
