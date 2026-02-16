@@ -2,7 +2,7 @@ package encode
 
 import "forge/parse"
 
-func encodeInstruments(instruments []parse.Instrument, maxUsedSlot int) []byte {
+func EncodeInstruments(instruments []parse.Instrument, maxUsedSlot int) []byte {
 	return encodeInstrumentsFromSource(instruments, maxUsedSlot, nil, 0, 0)
 }
 

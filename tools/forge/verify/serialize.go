@@ -87,16 +87,17 @@ func Serialize(
 	}
 
 	numPatterns := len(encoded.PatternOffsets)
-	patternDataStart := serialize.PackedPtrsOffset + numPatterns*2
+	packedPtrsOff := serialize.PackedPtrsOffset()
+	patternDataStart := packedPtrsOff + numPatterns*2
 
 	for i := 0; i < numPatterns; i++ {
-		if serialize.PackedPtrsOffset+i*2+1 >= len(output) {
+		if packedPtrsOff+i*2+1 >= len(output) {
 			details = append(details, fmt.Sprintf("pattern pointer %d out of bounds", i))
 			continue
 		}
 
-		lo := output[serialize.PackedPtrsOffset+i*2]
-		hi := output[serialize.PackedPtrsOffset+i*2+1] & 0x1F
+		lo := output[packedPtrsOff+i*2]
+		hi := output[packedPtrsOff+i*2+1] & 0x1F
 		ptr := int(lo) | (int(hi) << 8)
 
 		if ptr >= len(output) {
@@ -104,8 +105,8 @@ func Serialize(
 				i, ptr, len(output)))
 		}
 
-		if ptr < patternDataStart && ptr >= serialize.PackedPtrsOffset {
-			if ptr >= serialize.RowDictOffset && ptr < serialize.PackedPtrsOffset {
+		if ptr < patternDataStart && ptr >= packedPtrsOff {
+			if ptr >= serialize.RowDictOffset && ptr < packedPtrsOff {
 				continue
 			}
 			if ptr >= serialize.InstOffset && ptr < serialize.BitstreamOffset {
@@ -199,7 +200,7 @@ func SerializeBounds(
 	}
 
 	ptrTableSize := numPatterns * 2
-	ptrTableEnd := serialize.PackedPtrsOffset + ptrTableSize
+	ptrTableEnd := serialize.PackedPtrsOffset() + ptrTableSize
 	if ptrTableEnd > serialize.MaxOutputSize {
 		details = append(details, fmt.Sprintf("pattern pointer table extends to %d, exceeds max output size %d",
 			ptrTableEnd, serialize.MaxOutputSize))

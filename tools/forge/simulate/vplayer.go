@@ -1,9 +1,10 @@
-package validate
+package simulate
 
 import (
 	"fmt"
 
 	"forge/encode"
+	"forge/serialize"
 	"forge/transform"
 )
 
@@ -182,54 +183,45 @@ func NewVirtualPlayer(
 }
 
 func (vp *VirtualPlayer) parseSongData(data []byte, numPatterns int) {
-	// Layout from serialize/layout.go
-	const (
-		InstOffset       = 0x000
-		BitstreamOffset  = 0x1F0
-		FilterOffset     = 0x5EC
-		ArpOffset        = 0x6CF
-		TransBaseOffset  = 0x78B
-		DeltaBaseOffset  = 0x78C
-		RowDictOffset    = 0x78D
-		DictArraySize    = 365
-	)
-	PackedPtrsOffset := RowDictOffset + DictArraySize*3
+	// Use layout constants from serialize package
+	DictArraySize := serialize.DictArraySize
+	PackedPtrsOffset := serialize.PackedPtrsOffset()
 
 	// Store full data for reading patterns from gaps
 	vp.fullData = data
 
 	// Parse instrument data
-	vp.instData = data[InstOffset:BitstreamOffset]
+	vp.instData = data[serialize.InstOffset:serialize.BitstreamOffset]
 	vp.numInst = len(vp.instData) / 16
 
 	// Parse bitstream
-	bitstreamEnd := FilterOffset
+	bitstreamEnd := serialize.FilterOffset
 	if bitstreamEnd > len(data) {
 		bitstreamEnd = len(data)
 	}
-	vp.bitstream = data[BitstreamOffset:bitstreamEnd]
+	vp.bitstream = data[serialize.BitstreamOffset:bitstreamEnd]
 
 	// Parse filter and arp tables
-	if FilterOffset < len(data) && ArpOffset <= len(data) {
-		vp.filterTable = data[FilterOffset:ArpOffset]
+	if serialize.FilterOffset < len(data) && serialize.ArpOffset <= len(data) {
+		vp.filterTable = data[serialize.FilterOffset:serialize.ArpOffset]
 	}
-	if ArpOffset < len(data) && TransBaseOffset <= len(data) {
-		vp.arpTable = data[ArpOffset:TransBaseOffset]
+	if serialize.ArpOffset < len(data) && serialize.TransBaseOffset <= len(data) {
+		vp.arpTable = data[serialize.ArpOffset:serialize.TransBaseOffset]
 	}
 
 	// Parse base values
-	if TransBaseOffset < len(data) {
-		vp.transBase = data[TransBaseOffset]
+	if serialize.TransBaseOffset < len(data) {
+		vp.transBase = data[serialize.TransBaseOffset]
 	}
-	if DeltaBaseOffset < len(data) {
-		vp.deltaBase = data[DeltaBaseOffset]
+	if serialize.DeltaBaseOffset < len(data) {
+		vp.deltaBase = data[serialize.DeltaBaseOffset]
 	}
 
 	// Parse row dictionary (3 arrays of DictArraySize bytes each)
-	if RowDictOffset+DictArraySize*3 <= len(data) {
-		vp.rowDict[0] = data[RowDictOffset : RowDictOffset+DictArraySize]
-		vp.rowDict[1] = data[RowDictOffset+DictArraySize : RowDictOffset+DictArraySize*2]
-		vp.rowDict[2] = data[RowDictOffset+DictArraySize*2 : RowDictOffset+DictArraySize*3]
+	if serialize.RowDictOffset+DictArraySize*3 <= len(data) {
+		vp.rowDict[0] = data[serialize.RowDictOffset : serialize.RowDictOffset+DictArraySize]
+		vp.rowDict[1] = data[serialize.RowDictOffset+DictArraySize : serialize.RowDictOffset+DictArraySize*2]
+		vp.rowDict[2] = data[serialize.RowDictOffset+DictArraySize*2 : serialize.RowDictOffset+DictArraySize*3]
 	}
 
 	// Parse packed pattern pointers (keep as absolute offsets into fullData)
@@ -597,12 +589,23 @@ func (vp *VirtualPlayer) decodeAdvanceRow(ch int) {
 		if showDecode {
 			fmt.Printf("      -> dict[%d] = %02X %02X %02X\n", idx, c.prevRow[0], c.prevRow[1], c.prevRow[2])
 		}
-	} else if b < 0xFF {
-		// $EF-$FE: RLE 1-16
+	} else if b < 0xFE {
+		// $EF-$FD: RLE 1-15
 		c.rleCount = int(b) - 0xEF
 		c.srcOff++
 		if showDecode {
 			fmt.Printf("      -> RLE %d (repeat prev)\n", c.rleCount)
+		}
+	} else if b == 0xFE {
+		// $FE: note-only (keep inst/eff/param, change note)
+		c.srcOff++
+		if srcOff+1 < len(vp.fullData) {
+			noteByte := vp.fullData[srcOff+1]
+			c.prevRow[0] = noteByte // Only update note byte, keep inst/eff/param
+			c.srcOff++
+			if showDecode {
+				fmt.Printf("      -> note-only: %02X (inst/eff unchanged)\n", noteByte)
+			}
 		}
 	} else {
 		// $FF: extended dict index
@@ -732,19 +735,19 @@ func (vp *VirtualPlayer) processInstrument(ch int) {
 			vp.currentFrame, c.effect, c.waveIdx, c.waveform)
 	}
 
-	// Effect 7 (set waveform) runs AFTER wave table - overrides waveform but doesn't disable wave table
+	// PlayerEffectWave (set waveform) runs AFTER wave table - overrides waveform but doesn't disable wave table
 	// Original GT effect 9 behavior: just override waveform, let wave table keep advancing
 	// This allows wave table to resume when effect changes to 0
-	if c.effect == 7 {
+	if c.effect == PlayerEffectWave {
 		c.waveform = c.param
 		if vpDebug && ch == 2 && vp.currentFrame >= 405 && vp.currentFrame <= 412 {
 			fmt.Printf("    [f%d] ch2 eff7: overriding waveform=%02X from param\n", vp.currentFrame, c.param)
 		}
 	}
 
-	// ASM: Skip arp/freq calculation if effect is 2 (portamento)
+	// ASM: Skip arp/freq calculation if effect is PlayerEffectPorta (portamento)
 	// Portamento keeps current freq and slides it toward target
-	if c.effect == 2 {
+	if c.effect == PlayerEffectPorta {
 		goto skipArpFreq
 	}
 
@@ -826,10 +829,10 @@ func (vp *VirtualPlayer) processInstrument(ch int) {
 
 skipArpFreq:
 
-	// ASM: Effect 1 (pattern arpeggio) runs AFTER instrument arp and OVERWRITES frequency
+	// ASM: PlayerEffectArp (pattern arpeggio) runs AFTER instrument arp and OVERWRITES frequency
 	// This ensures arpIdx continues to advance even during pattern arpeggio
-	// Trigger on effect 1 (regular arp), effect 15 (perm arp), or effect 0 with active permArp
-	if c.effect == 1 || c.effect == 15 || (c.effect == 0 && c.patArp != 0) {
+	// Trigger on PlayerEffectArp (regular arp), PlayerEffectPermArp2 (perm arp), or effect 0 with active permArp
+	if c.effect == PlayerEffectArp || c.effect == PlayerEffectPermArp2 || (c.effect == PlayerEffectSpecial && c.patArp != 0) {
 		note := int(c.playingNote)
 		if note > 0 && note < 0x61 {
 			// Pattern arpeggio: mod3counter 0=low, 1=high, >=2=base
@@ -877,8 +880,8 @@ skipArpFreq:
 	}
 
 	// Pulse modulation - matches ASM pi_pulse logic
-	// Only runs if pulseSpeed != 0 AND effect is not 8 (effect 8 overrides)
-	if c.pulseSpeed != 0 && c.effect != 8 {
+	// Only runs if pulseSpeed != 0 AND effect is not PlayerEffectPulse (effect 8 overrides)
+	if c.pulseSpeed != 0 && c.effect != PlayerEffectPulse {
 		if c.pulseDir == 0 {
 			// Going up
 			newLo := int(c.pulseLo) + int(c.pulseSpeed)
@@ -921,9 +924,9 @@ skipArpFreq:
 		}
 	}
 
-	// Effect 8 (pulse width) runs every frame - overrides pulse modulation
+	// PlayerEffectPulse (pulse width) runs every frame - overrides pulse modulation
 	// odin_player: param!=0 -> hi=$08,lo=$00; param==0 -> hi=$00,lo=$00
-	if c.effect == 8 {
+	if c.effect == PlayerEffectPulse {
 		if c.param != 0 {
 			c.pulseHi = 0x08
 		} else {
@@ -932,15 +935,15 @@ skipArpFreq:
 		c.pulseLo = 0x00
 	}
 
-	// Effect 0 param 1 (GT vibrato disable) runs AFTER vibdepth is loaded from instrument
+	// PlayerEffectSpecial param PlayerParam0VibOff (GT vibrato disable) runs AFTER vibdepth is loaded from instrument
 	// This matches ASM order: pi_hasinst loads vibdepth, then pi_noinst effect 0/1 clears it
-	if c.effect == 0 && c.param == 1 {
+	if c.effect == PlayerEffectSpecial && c.param == PlayerParam0VibOff {
 		c.vibDepth = 0
 		c.vibSpeed = 0
 	}
 
-	// Portamento (effect 2) - slides current freq toward noteFreq every frame
-	if c.effect == 2 {
+	// Portamento (PlayerEffectPorta) - slides current freq toward noteFreq every frame
+	if c.effect == PlayerEffectPorta {
 		// Param is nibble-swapped: $XY original -> $YX stored
 		// Speed: low byte = $Y0, high byte = $0X -> 16-bit speed = $0XY0
 		speedLo := c.param & 0xF0
@@ -986,8 +989,8 @@ skipArpFreq:
 	}
 
 	// Slide effect - accumulate delta and apply to frequency
-	// ASM: effect B accumulates $20 to delta every frame the effect is active
-	if c.effect == 11 {
+	// ASM: PlayerEffectSlide accumulates $20 to delta every frame the effect is active
+	if c.effect == PlayerEffectSlide {
 		c.slideEnable = 0x80
 		if c.param == 0 {
 			// Slide up: add $20 to slideDelta
@@ -1083,21 +1086,21 @@ func (vp *VirtualPlayer) processEffect(ch int, effect, param byte) {
 	c := &vp.chn[ch]
 
 	switch effect {
-	case 0:
+	case PlayerEffectSpecial:
 		// No effect or special param
-		if c.permArp != 0 && param == 0 {
+		if c.permArp != 0 && param == PlayerParam0Nop {
 			c.patArp = c.permArp // Apply permanent arp on NOP rows
 		} else {
 			c.patArp = 0 // Clear pattern arpeggio
 		}
-		if param == 1 {
+		if param == PlayerParam0VibOff {
 			// GT vibrato - disable vibrato
 			c.vibDepth = 0
 			c.vibSpeed = 0
-		} else if param == 2 {
+		} else if param == PlayerParam0Break {
 			// Pattern break - skip to next order
 			vp.forceNewPattern = true
-		} else if param == 3 {
+		} else if param == PlayerParam0FineSlide {
 			// Fine slide - add $04 to slide delta once per row
 			if vp.speedCounter == 0 {
 				newLo := int(c.slideDeltaLo) + 0x04
@@ -1108,28 +1111,27 @@ func (vp *VirtualPlayer) processEffect(ch int, effect, param byte) {
 				c.slideEnable = 0x80
 			}
 		}
-	case 1:
-		// Pattern arpeggio (new effect 1) - clears permanent arp
+	case PlayerEffectArp:
+		// Pattern arpeggio - clears permanent arp
 		c.permArp = 0
 		c.patArp = param
-	case 2:
-		// Portamento (new effect 2) - sliding handled in processInstrument
+	case PlayerEffectPorta:
+		// Portamento - sliding handled in processInstrument
 		// Nothing to do here on row change
-	case 3:
-		// Speed (new effect 3)
-		// ASM sets speed unconditionally when speedcounter==0 (including speed=0)
+	case PlayerEffectSpeed:
+		// Speed - ASM sets speed unconditionally when speedcounter==0 (including speed=0)
 		if vp.speedCounter == 0 {
 			vp.speed = int(param)
 		}
-	case 4:
-		// Hard restart timing (remapped from F sub-effect 0x11)
+	case PlayerEffectHrdRest:
+		// Hard restart timing
 		if vp.speedCounter == 0 {
 			if vpDebug && ch == 0 {
 				fmt.Printf("    eff4 ch0: hardRestart set to %d at f%d row%d order%d (was %d)\n", param, vp.currentFrame, vp.row, vp.order, c.hardRestart)
 			}
 			c.hardRestart = param
 		}
-	case 5:
+	case PlayerEffectFiltTrig:
 		// Filter trigger - load filter params from instrument
 		// Param is instrument number * 16 (pre-shifted)
 		if vp.speedCounter == 0 && param != 0 {
@@ -1141,16 +1143,15 @@ func (vp *VirtualPlayer) processEffect(ch int, effect, param byte) {
 				vp.filterLoop = vp.instData[instBase+15] // INST_FILTLOOP
 			}
 		}
-	case 6:
-		// Set SR (remapped from original effect 8)
+	case PlayerEffectSR:
+		// Set SR
 		c.sr = param
-	case 7:
-		// Set waveform directly (remapped from original effect 9)
-		// In these GT songs, effect 9 = set waveform (not filter control)
+	case PlayerEffectWave:
+		// Set waveform directly
 		// NOTE: Don't set waveIdx=255 - let wave table continue advancing
 		// The waveform override happens every frame in processInstrument
 		c.waveform = param
-	case 8:
+	case PlayerEffectPulse:
 		// Pulse width (hardcoded values in odin_player)
 		// param != 0: pulseHi = 0x08, pulseLo = 0x00
 		// param == 0: pulseHi = 0x00, pulseLo = 0x00
@@ -1160,27 +1161,24 @@ func (vp *VirtualPlayer) processEffect(ch int, effect, param byte) {
 			c.pulseHi = 0x00
 		}
 		c.pulseLo = 0x00
-	case 9:
-		// Set AD (remapped from original effect 7)
-		// In these GT songs, effect 7 = set AD (not set waveform)
+	case PlayerEffectAD:
+		// Set AD
 		c.ad = param
-	case 10:
-		// Filter resonance (new effect A)
-		// ASM: just stores param directly to filter_resonance
+	case PlayerEffectReso:
+		// Filter resonance - stores param directly to filter_resonance
 		vp.filterResonance = param
-	case 11:
-		// Slide (new effect B) - sets up slide mode
+	case PlayerEffectSlide:
+		// Slide - sets up slide mode
 		// The actual delta accumulation happens every frame in processInstrument
 		// param 0 = up, param != 0 = down (stored for processInstrument to use)
 		c.slideEnable = 0x80
-	case 12:
-		// Global volume (new effect C)
+	case PlayerEffectGlobVol:
+		// Global volume
 		if vp.speedCounter == 0 {
 			vp.globalVolume = param & 0x0F
 		}
-	case 13:
-		// Filter mode (new effect D)
-		// ASM: param is pre-shifted, stores directly to filter_mode
+	case PlayerEffectFiltMode:
+		// Filter mode - param is pre-shifted, stores directly to filter_mode
 		if vp.speedCounter == 0 {
 			vp.filterMode = param
 		}
@@ -1372,10 +1370,18 @@ func (vp *VirtualPlayer) decodeRowForOrder(ch, orderNum, rowNum int) [3]byte {
 			idx := int(b) - 0x0F
 			prevRow = vp.lookupDict(idx)
 			srcOff++
-		} else if b < 0xFF {
-			// $EF-$FE: RLE 1-16
+		} else if b < 0xFE {
+			// $EF-$FD: RLE 1-15
 			rleCount = int(b) - 0xEF
 			srcOff++
+		} else if b == 0xFE {
+			// $FE: note-only (keep inst/eff/param, change note)
+			srcOff++
+			if dataSrcOff+1 < len(vp.fullData) {
+				noteByte := vp.fullData[dataSrcOff+1]
+				prevRow[0] = noteByte // Only update note byte
+				srcOff++
+			}
 		} else {
 			// $FF: extended dict index
 			srcOff++

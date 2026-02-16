@@ -68,7 +68,7 @@ func encodeInternal(song transform.TransformedSong, doReorder bool, songNum int,
 		}
 	}
 
-	result.RowDict = buildDictionary(patterns, truncateLimits)
+	result.RowDict = BuildDictionary(patterns, truncateLimits)
 
 	result.RowToIdx[string([]byte{0, 0, 0})] = 0
 	numEntries := len(result.RowDict) / 3
@@ -102,13 +102,21 @@ func encodeInternal(song transform.TransformedSong, doReorder bool, songNum int,
 		}
 	}
 
+	// Find rows that can ALWAYS use note-only encoding (excluded from dict)
+	noteOnlyRows := FindNoteOnlyRows(patterns, truncateLimits)
+	result.NoteOnlyRows = noteOnlyRows
+
 	origDict := result.RowDict
-	compactDict, oldToNew := compactDictionary(
-		result.RowDict, result.RowToIdx, patterns, truncateLimits, nil)
+	compactDict, oldToNew := CompactDictionaryWithNoteOnly(
+		result.RowDict, result.RowToIdx, patterns, truncateLimits, nil, noteOnlyRows)
 	result.RowDict = compactDict
 
 	numCompact := len(compactDict) / 3
-	fmt.Printf("  [dict] song %d: %d entries\n", songNum, numCompact)
+	if len(noteOnlyRows) > 0 {
+		fmt.Printf("  [dict] song %d: %d entries (-%d note-only)\n", songNum, numCompact, len(noteOnlyRows))
+	} else {
+		fmt.Printf("  [dict] song %d: %d entries\n", songNum, numCompact)
+	}
 
 	result.RowToIdx = make(map[string]int)
 	result.RowToIdx[string([]byte{0, 0, 0})] = 0
@@ -140,6 +148,12 @@ func encodeInternal(song transform.TransformedSong, doReorder bool, songNum int,
 			b1 := (r.Inst & 0x1F) | ((r.Effect & 7) << 5)
 			curRow := [3]byte{b0, b1, r.Param}
 			if curRow == prevRow || curRow == [3]byte{0, 0, 0} {
+				prevRow = curRow
+				continue
+			}
+			// Skip validation for note-only rows (they're not in dict)
+			if noteOnlyRows[string(curRow[:])] {
+				prevRow = curRow
 				continue
 			}
 			if _, ok := result.RowToIdx[string(curRow[:])]; !ok {
@@ -150,11 +164,11 @@ func encodeInternal(song transform.TransformedSong, doReorder bool, songNum int,
 		}
 	}
 
-	canonPatterns, canonTruncate, patternToCanon := deduplicatePatternsWithEquiv(
+	canonPatterns, canonTruncate, patternToCanon := DeduplicatePatternsWithEquiv(
 		patterns, compactDict, result.RowToIdx, truncateLimits, nil)
 
 	canonPackedData, canonGapCodes, primaryCount, extendedCount :=
-		packPatternsWithEquiv(canonPatterns, compactDict, result.RowToIdx, canonTruncate, nil)
+		PackPatternsWithNoteOnly(canonPatterns, compactDict, result.RowToIdx, canonTruncate, nil, noteOnlyRows)
 
 	result.PrimaryCount = primaryCount
 	result.ExtendedCount = extendedCount
@@ -168,7 +182,7 @@ func encodeInternal(song transform.TransformedSong, doReorder bool, songNum int,
 	}
 
 	var canonOffsets []uint16
-	result.PackedPatterns, canonOffsets = optimizeOverlap(canonPackedData)
+	result.PackedPatterns, canonOffsets = OptimizeOverlap(canonPackedData)
 
 	result.PatternOffsets = make([]uint16, len(patterns))
 	for i := range patterns {
@@ -181,9 +195,9 @@ func encodeInternal(song transform.TransformedSong, doReorder bool, songNum int,
 	result.PatternCanon = patternToCanon
 
 	result.TempTranspose, result.TempTrackptr, result.TrackStarts =
-		encodeOrdersWithRemap(song, reorderMap)
+		EncodeOrdersWithRemap(song, reorderMap)
 
-	result.InstrumentData = encodeInstruments(song.Instruments, song.MaxUsedSlot)
+	result.InstrumentData = EncodeInstruments(song.Instruments, song.MaxUsedSlot)
 
 	result.RawPatterns = patterns
 	result.RawPatternsEquiv = patterns

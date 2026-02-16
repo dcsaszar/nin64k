@@ -161,9 +161,11 @@ func PackedPatterns(transformed transform.TransformedSong, encoded encode.Encode
 
 	const dictOffsetBase = 0x10
 	const rleBase = 0xEF
+	const noteOnlyMarker = 0xFE
 	const extMarker = 0xFF
 	rowDictOff := serialize.RowDictOffset
 	dictArraySize := serialize.DictArraySize
+	packedPtrsOff := serialize.PackedPtrsOffset()
 
 	numPatterns := len(encoded.RawPatternsEquiv)
 	for patIdx := 0; patIdx < numPatterns; patIdx++ {
@@ -172,7 +174,7 @@ func PackedPatterns(transformed transform.TransformedSong, encoded encode.Encode
 			continue
 		}
 
-		ptrOff := serialize.PackedPtrsOffset + patIdx*2
+		ptrOff := packedPtrsOff + patIdx*2
 		if ptrOff+1 >= len(output) {
 			continue
 		}
@@ -196,11 +198,22 @@ func PackedPatterns(transformed transform.TransformedSong, encoded encode.Encode
 					decodedRows = append(decodedRows, row)
 				}
 				prevRow = row
-			} else if b >= rleBase && b < extMarker {
+			} else if b >= rleBase && b < noteOnlyMarker {
+				// $EF-$FD: RLE 1-15
 				count := int(b - rleBase + 1)
 				for i := 0; i < count && len(decodedRows) < 64; i++ {
 					decodedRows = append(decodedRows, prevRow)
 				}
+			} else if b == noteOnlyMarker {
+				// $FE: note-only (keep inst/eff/param, change note)
+				if pos >= len(output) {
+					break
+				}
+				noteByte := output[pos]
+				pos++
+				row := [3]byte{noteByte, prevRow[1], prevRow[2]}
+				decodedRows = append(decodedRows, row)
+				prevRow = row
 			} else if b == extMarker {
 				if pos >= len(output) {
 					break
@@ -271,6 +284,7 @@ func ReferenceOutput(output []byte, referencePath string) error {
 	}
 
 	var details []string
+	packedPtrsOff := serialize.PackedPtrsOffset()
 
 	sections := []struct {
 		name  string
@@ -282,8 +296,8 @@ func ReferenceOutput(output []byte, referencePath string) error {
 		{"filter", serialize.FilterOffset, serialize.ArpOffset},
 		{"arp", serialize.ArpOffset, serialize.TransBaseOffset},
 		{"bases", serialize.TransBaseOffset, serialize.RowDictOffset},
-		{"dict", serialize.RowDictOffset, serialize.PackedPtrsOffset},
-		{"pattern_ptrs", serialize.PackedPtrsOffset, -1},
+		{"dict", serialize.RowDictOffset, packedPtrsOff},
+		{"pattern_ptrs", packedPtrsOff, -1},
 	}
 
 	minLen := len(output)
@@ -380,10 +394,11 @@ func PlaybackStream(
 
 	const dictOffsetBase = 0x10
 	const rleBase = 0xEF
+	const noteOnlyMarker2 = 0xFE
 	const extMarker = 0xFF
 	rowDictOff := serialize.RowDictOffset
 	dictArraySize := serialize.DictArraySize
-	packedPtrsOff := serialize.PackedPtrsOffset
+	packedPtrsOff := serialize.PackedPtrsOffset()
 
 	numPatterns := len(encoded.RawPatternsEquiv)
 	numOrders := len(transformed.Orders[0])
@@ -418,11 +433,22 @@ func PlaybackStream(
 					decodedSlots = append(decodedSlots, row)
 				}
 				prevRow = row
-			} else if b >= rleBase && b < extMarker {
+			} else if b >= rleBase && b < noteOnlyMarker2 {
+				// $EF-$FD: RLE 1-15
 				count := int(b - rleBase + 1)
 				for i := 0; i < count && len(decodedSlots) < 64; i++ {
 					decodedSlots = append(decodedSlots, prevRow)
 				}
+			} else if b == noteOnlyMarker2 {
+				// $FE: note-only (keep inst/eff/param, change note)
+				if pos >= len(output) {
+					break
+				}
+				noteByte := output[pos]
+				pos++
+				row := [3]byte{noteByte, prevRow[1], prevRow[2]}
+				decodedSlots = append(decodedSlots, row)
+				prevRow = row
 			} else if b == extMarker {
 				if pos >= len(output) {
 					break
@@ -598,7 +624,7 @@ func BuildFrameMap(
 	order := 0
 	row := 0
 
-	// Effect 3 = speed in the remapped effect numbering
+	// PlayerEffectSpeed = 3 in the remapped effect numbering
 	const speedEffect = 3
 
 	for frame := 0; frame < maxFrames; frame++ {

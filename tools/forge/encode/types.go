@@ -3,6 +3,7 @@ package encode
 type EncodedSong struct {
 	RowDict          []byte
 	RowToIdx         map[string]int
+	NoteOnlyRows     map[string]bool // Rows that will use note-only encoding (excluded from dict)
 	RawPatterns      [][]byte
 	RawPatternsEquiv [][]byte
 	TruncateLimits   []int

@@ -4,11 +4,11 @@ import (
 	"forge/transform"
 )
 
-func encodeOrders(song transform.TransformedSong) ([3][]byte, [3][]byte, [3]byte) {
-	return encodeOrdersWithRemap(song, nil)
+func EncodeOrders(song transform.TransformedSong) ([3][]byte, [3][]byte, [3]byte) {
+	return EncodeOrdersWithRemap(song, nil)
 }
 
-func encodeOrdersWithRemap(song transform.TransformedSong, reorderMap []int) ([3][]byte, [3][]byte, [3]byte) {
+func EncodeOrdersWithRemap(song transform.TransformedSong, reorderMap []int) ([3][]byte, [3][]byte, [3]byte) {
 	numOrders := len(song.Orders[0])
 	if numOrders == 0 {
 		return [3][]byte{}, [3][]byte{}, [3]byte{}

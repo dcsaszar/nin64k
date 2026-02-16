@@ -5,7 +5,7 @@ import (
 	"strings"
 )
 
-func deduplicatePatternsWithEquiv(
+func DeduplicatePatternsWithEquiv(
 	patterns [][]byte,
 	dict []byte,
 	rowToIdx map[string]int,

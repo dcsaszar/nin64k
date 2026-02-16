@@ -4,7 +4,7 @@ import "fmt"
 
 var DebugPermarp = false
 
-const NopHardParam = 4 // Effect 0, param 4 = NOP(HARD) clears permarp
+const NopHardParam = PlayerParam0NopHard // Effect 0, param 4 = NOP(HARD) clears permarp
 
 // VerifyFullSongPermarp verifies that transformed patterns produce the same effective arp
 // stream as original patterns when played through the entire song order.

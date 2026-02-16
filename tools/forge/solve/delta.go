@@ -457,6 +457,134 @@ func SolveDeltaTable(songSets [9][]int) DeltaTableResult {
 	return SolveDeltaTableWithWindow(songSets, 32)
 }
 
+func FindOptimalStartConstant(baseDeltaSets [9][]int, trackStarts [9][3]byte) (int, [9][]int) {
+	var baseUnion [256]bool
+	for s := 0; s < 9; s++ {
+		for _, d := range baseDeltaSets[s] {
+			baseUnion[byte(d)] = true
+		}
+	}
+
+	type constScore struct {
+		c, union int
+	}
+	scores := make([]constScore, 256)
+	for c := 0; c < 256; c++ {
+		var seen [256]bool
+		copy(seen[:], baseUnion[:])
+		for s := 0; s < 9; s++ {
+			for ch := 0; ch < 3; ch++ {
+				d := int(trackStarts[s][ch]) - c
+				if d > 127 {
+					d -= 256
+				} else if d < -128 {
+					d += 256
+				}
+				seen[byte(d)] = true
+			}
+		}
+		count := 0
+		for _, v := range seen {
+			if v {
+				count++
+			}
+		}
+		scores[c] = constScore{c, count}
+	}
+	sort.Slice(scores, func(i, j int) bool { return scores[i].union < scores[j].union })
+
+	type constResult struct {
+		c, size int
+	}
+	constResults := make(chan constResult, 10)
+	for i := 0; i < 10; i++ {
+		go func(c int) {
+			var testSets [9][]int
+			for s := 0; s < 9; s++ {
+				var seen [256]bool
+				for _, d := range baseDeltaSets[s] {
+					seen[byte(d)] = true
+				}
+				for ch := 0; ch < 3; ch++ {
+					d := int(trackStarts[s][ch]) - c
+					if d > 127 {
+						d -= 256
+					} else if d < -128 {
+						d += 256
+					}
+					seen[byte(d)] = true
+				}
+				set := make([]int, 0, 35)
+				for d := 0; d < 256; d++ {
+					if seen[d] {
+						if d > 127 {
+							set = append(set, d-256)
+						} else {
+							set = append(set, d)
+						}
+					}
+				}
+				testSets[s] = set
+			}
+			result := SolveDeltaTable(testSets)
+			constResults <- constResult{c, len(result.Table)}
+		}(scores[i].c)
+	}
+	bestConst, bestSize := 0, 9999
+	for i := 0; i < 10; i++ {
+		r := <-constResults
+		if r.size < bestSize || (r.size == bestSize && r.c < bestConst) {
+			bestSize, bestConst = r.size, r.c
+		}
+	}
+
+	var deltaSets [9][]int
+	for s := 0; s < 9; s++ {
+		var seen [256]bool
+		for _, d := range baseDeltaSets[s] {
+			seen[byte(d)] = true
+		}
+		for ch := 0; ch < 3; ch++ {
+			d := int(trackStarts[s][ch]) - bestConst
+			if d > 127 {
+				d -= 256
+			} else if d < -128 {
+				d += 256
+			}
+			seen[byte(d)] = true
+		}
+		set := make([]int, 0, 35)
+		for d := 0; d < 256; d++ {
+			if seen[d] {
+				if d > 127 {
+					set = append(set, d-256)
+				} else {
+					set = append(set, d)
+				}
+			}
+		}
+		deltaSets[s] = set
+		sort.Ints(deltaSets[s])
+	}
+
+	return bestConst, deltaSets
+}
+
+func BuildDeltaLookupMaps(deltaResult DeltaTableResult) [9]map[int]byte {
+	var deltaToIdx [9]map[int]byte
+	for songIdx := 0; songIdx < 9; songIdx++ {
+		deltaToIdx[songIdx] = make(map[int]byte)
+		base := deltaResult.Bases[songIdx]
+		for i := 0; i < 32 && base+i < len(deltaResult.Table); i++ {
+			v := deltaResult.Table[base+i]
+			if v != DeltaEmpty {
+				deltaToIdx[songIdx][int(v)] = byte(i)
+			}
+		}
+	}
+	return deltaToIdx
+}
+
 func VerifyDeltaTable(result DeltaTableResult, window int) bool {
 	allOk := true
 	for songIdx := 0; songIdx < 9; songIdx++ {

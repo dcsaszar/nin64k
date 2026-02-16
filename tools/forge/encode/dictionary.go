@@ -5,7 +5,7 @@ import (
 	"sort"
 )
 
-func buildDictionary(patterns [][]byte, truncateLimits []int) []byte {
+func BuildDictionary(patterns [][]byte, truncateLimits []int) []byte {
 	rowUsage := make(map[string]int)
 	allRows := make(map[string]bool)
 
@@ -62,17 +62,132 @@ func buildDictionary(patterns [][]byte, truncateLimits []int) []byte {
 	return dict
 }
 
-func compactDictionary(
+// isNoteOnlyCapable checks if a row transition can use note-only encoding
+// (same inst/eff/param, different note)
+func isNoteOnlyCapable(prev, cur [3]byte) bool {
+	if prev == [3]byte{0, 0, 0} || cur == [3]byte{0, 0, 0} {
+		return false
+	}
+	// Same inst|eff_lo (byte 1) and param (byte 2)
+	sameInstEffParam := cur[1] == prev[1] && cur[2] == prev[2]
+	// Same effect bit 3 (byte 0 bit 7)
+	sameEffBit3 := (cur[0] & 0x80) == (prev[0] & 0x80)
+	// Different note (byte 0 bits 0-6)
+	diffNote := (cur[0] & 0x7F) != (prev[0] & 0x7F)
+	return sameInstEffParam && sameEffBit3 && diffNote
+}
+
+// findNoteOnlyRows identifies rows that SHOULD use note-only encoding
+// Returns a set of row strings that should be excluded from dictionary
+// Only excludes when note-only saves space: 2N bytes vs 3 + N (primary) or 3 + 2N (extended)
+func FindNoteOnlyRows(patterns [][]byte, truncateLimits []int) map[string]bool {
+	const primaryMax = 224
+
+	// Track for each row: total uses and note-only-capable uses
+	type rowStats struct {
+		totalUses    int
+		noteOnlyUses int
+	}
+	stats := make(map[string]*rowStats)
+
+	for i, pat := range patterns {
+		numRows := len(pat) / 3
+		truncateAt := numRows
+		if i < len(truncateLimits) && truncateLimits[i] > 0 && truncateLimits[i] < truncateAt {
+			truncateAt = truncateLimits[i]
+		}
+
+		var prevRow [3]byte
+		for row := 0; row < truncateAt; row++ {
+			off := row * 3
+			curRow := [3]byte{pat[off], pat[off+1], pat[off+2]}
+			if curRow == prevRow || curRow == [3]byte{0, 0, 0} {
+				prevRow = curRow
+				continue
+			}
+
+			key := string(curRow[:])
+			if stats[key] == nil {
+				stats[key] = &rowStats{}
+			}
+			stats[key].totalUses++
+			if isNoteOnlyCapable(prevRow, curRow) {
+				stats[key].noteOnlyUses++
+			}
+			prevRow = curRow
+		}
+	}
+
+	// Count total unique rows (to estimate dict position)
+	// Sort by usage count (most used first) to estimate dict index
+	type rowEntry struct {
+		key   string
+		stats *rowStats
+	}
+	var entries []rowEntry
+	for key, s := range stats {
+		entries = append(entries, rowEntry{key, s})
+	}
+	sort.Slice(entries, func(i, j int) bool {
+		if entries[i].stats.totalUses != entries[j].stats.totalUses {
+			return entries[i].stats.totalUses > entries[j].stats.totalUses
+		}
+		return entries[i].key < entries[j].key
+	})
+
+	// Rows where ALL uses can be note-only AND it saves space
+	noteOnlyRows := make(map[string]bool)
+	for idx, e := range entries {
+		s := e.stats
+		if s.noteOnlyUses != s.totalUses || s.totalUses == 0 {
+			continue
+		}
+		// Dict position (1-indexed, after sorting by frequency)
+		dictIdx := idx + 1
+		// Cost analysis:
+		// - Dict entry + lookups: 3 + N (primary) or 3 + 2N (extended)
+		// - Note-only: 2N
+		// Note-only wins when: 2N < 3 + N → N < 3 (primary)
+		//                  or: 2N < 3 + 2N → always (extended)
+		if dictIdx >= primaryMax {
+			// Would be extended: note-only always saves 3 bytes
+			noteOnlyRows[e.key] = true
+		} else if s.totalUses <= 2 {
+			// Would be primary but referenced 1-2 times: note-only saves 1-2 bytes
+			noteOnlyRows[e.key] = true
+		}
+		// Otherwise keep in dict (primary with 3+ refs is cheaper)
+	}
+	return noteOnlyRows
+}
+
+func CompactDictionary(
 	dict []byte,
 	rowToIdx map[string]int,
 	patterns [][]byte,
 	truncateLimits []int,
 	equivMap map[int]int,
 ) ([]byte, map[int]int) {
+	return CompactDictionaryWithNoteOnly(dict, rowToIdx, patterns, truncateLimits, equivMap, nil)
+}
+
+// NoteOnlyExcluded tracks how many dict entries were excluded due to note-only
+var NoteOnlyExcluded int
+
+func CompactDictionaryWithNoteOnly(
+	dict []byte,
+	rowToIdx map[string]int,
+	patterns [][]byte,
+	truncateLimits []int,
+	equivMap map[int]int,
+	noteOnlyRows map[string]bool,
+) ([]byte, map[int]int) {
 	numEntries := len(dict) / 3
 	usedIdx := make(map[int]bool)
 	idxCount := make(map[int]int)
 	usedIdx[0] = true
+
+	NoteOnlyExcluded = 0
 
 	for i, pat := range patterns {
 		numRows := len(pat) / 3
@@ -86,8 +201,16 @@ func compactDictionary(
 			off := row * 3
 			curRow := [3]byte{pat[off], pat[off+1], pat[off+2]}
 			if curRow == prevRow {
+				prevRow = curRow
 				continue
 			}
+
+			// Skip rows that will use note-only encoding
+			if noteOnlyRows != nil && noteOnlyRows[string(curRow[:])] {
+				prevRow = curRow
+				continue
+			}
+
 			idx := rowToIdx[string(curRow[:])]
 			if equivMap != nil {
 				if mappedIdx, ok := equivMap[idx]; ok {

@@ -27,3 +27,18 @@ func SolveTransposeTable(songSets [9][]int8) TransposeTableResult {
 
 	return TransposeTableResult{Table: table, Bases: deltaResult.Bases}
 }
+
+func BuildTransposeLookupMaps(transposeResult TransposeTableResult) [9]map[int8]byte {
+	var transposeToIdx [9]map[int8]byte
+	for songIdx := 0; songIdx < 9; songIdx++ {
+		transposeToIdx[songIdx] = make(map[int8]byte)
+		tbase := transposeResult.Bases[songIdx]
+		for i := 0; i < 16 && tbase+i < len(transposeResult.Table); i++ {
+			v := transposeResult.Table[tbase+i]
+			if _, exists := transposeToIdx[songIdx][v]; !exists {
+				transposeToIdx[songIdx][v] = byte(i)
+			}
+		}
+	}
+	return transposeToIdx
+}

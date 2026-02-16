@@ -8,7 +8,8 @@ import (
 
 func Serialize(song transform.TransformedSong, encoded encode.EncodedSong) []byte {
 	numPatterns := len(encoded.PatternOffsets)
-	patternDataStart := PackedPtrsOffset + numPatterns*2
+	packedPtrsOff := PackedPtrsOffset()
+	patternDataStart := packedPtrsOff + numPatterns*2
 	totalSize := patternDataStart + len(encoded.PackedPatterns)
 	output := make([]byte, totalSize)
 
@@ -46,8 +47,8 @@ func Serialize(song transform.TransformedSong, encoded encode.EncodedSong) []byt
 		if i < len(encoded.PatternGapCodes) {
 			gapCode = encoded.PatternGapCodes[i]
 		}
-		output[PackedPtrsOffset+i*2] = byte(pOff & 0xFF)
-		output[PackedPtrsOffset+i*2+1] = byte(pOff>>8) | (gapCode << 5)
+		output[packedPtrsOff+i*2] = byte(pOff & 0xFF)
+		output[packedPtrsOff+i*2+1] = byte(pOff>>8) | (gapCode << 5)
 	}
 
 	copy(output[patternDataStart:], encoded.PackedPatterns)
@@ -73,6 +74,11 @@ type gap struct {
 var debugGaps = false
 var DebugCanon = false
 
+var GapStats struct {
+	Available int
+	Used      int
+}
+
 type gapSpec struct {
 	start int
 	size  int
@@ -87,9 +93,9 @@ func placePatternDataWithGaps(
 	arpSize int,
 	numDictEntries int,
 	numPatterns int,
-) ([]uint16, []byte, map[int][]byte) {
+) ([]uint16, []byte, map[int][]byte, int) {
 	if len(patterns) == 0 {
-		return nil, nil, nil
+		return nil, nil, nil, 0
 	}
 
 	instGapStart := InstOffset + instSize
@@ -126,14 +132,15 @@ func placePatternDataWithGaps(
 	}
 
 	// Gap order matches odin_convert for consistent pattern assignment
+	// Note: dict2 tail is NOT a gap - it's contiguous with the main pattern blob area
+	dict2TailStart := RowDictOffset + DictArraySize*2 + dictFreeStart
 	gapSpecs := []gapSpec{
 		{instGapStart, instGapSize},
 		{filterGapStart, filterGapSize},
 		{arpGapStart, arpGapSize},
 		{RowDictOffset + dictFreeStart, dictFreeSize},
 		{RowDictOffset + DictArraySize + dictFreeStart, dictFreeSize},
-		{RowDictOffset + DictArraySize*2 + dictFreeStart, dictFreeSize},
-		{bitstreamGapStart, bitstreamGapSize}, // Last, matching odin
+		{bitstreamGapStart, bitstreamGapSize},
 	}
 
 	if debugGaps {
@@ -141,15 +148,16 @@ func placePatternDataWithGaps(
 		for _, g := range gapSpecs {
 			totalGapSize += g.size
 		}
-		fmt.Printf("    [gaps] inst=%d filter=%d arp=%d dict=%d×3 bitstream=%d total=%d\n",
+		fmt.Printf("    [gaps] inst=%d filter=%d arp=%d dict=%d×2 bitstream=%d total=%d\n",
 			instGapSize, filterGapSize, arpGapSize, dictFreeSize, bitstreamGapSize, totalGapSize)
 	}
 
 	// Try multiple candidate orderings and pick best result
 	type result struct {
-		offsets []uint16
-		blob    []byte
-		gapData map[int][]byte
+		offsets       []uint16
+		blob          []byte
+		gapData       map[int][]byte
+		mainBlobStart int
 	}
 
 	tryOrdering := func(candidateOrder []int) result {
@@ -217,7 +225,11 @@ func placePatternDataWithGaps(
 		}
 
 		mainBlob, remainingOffsets := optimizeOverlapForGaps(remainingPats)
-		mainBlobStart := PackedPtrsOffset + numPatterns*2
+		// Use dict2 tail if blob fits, otherwise fall back to after packed_ptrs
+		mainBlobStart := dict2TailStart
+		if len(mainBlob) > PackedPtrsOffset()-dict2TailStart {
+			mainBlobStart = PackedPtrsOffset() + numPatterns*2
+		}
 
 		finalOffsets := make([]uint16, len(patterns))
 		for i := range patterns {
@@ -228,7 +240,7 @@ func placePatternDataWithGaps(
 			}
 		}
 
-		return result{finalOffsets, mainBlob, gapData}
+		return result{finalOffsets, mainBlob, gapData, mainBlobStart}
 	}
 
 	// Build candidate orderings
@@ -283,12 +295,21 @@ func placePatternDataWithGaps(
 
 	bestResult := tryOrdering(order)
 
+	GapStats.Available = 0
+	for _, g := range gapSpecs {
+		GapStats.Available += g.size
+	}
+	GapStats.Used = 0
+	for _, blob := range bestResult.gapData {
+		GapStats.Used += len(blob)
+	}
+
 	if debugGaps {
 		fmt.Printf("    [gaps] pats_in_main=%d main_blob=%d\n",
 			len(patterns)-len(bestResult.gapData), len(bestResult.blob))
 	}
 
-	return bestResult.offsets, bestResult.blob, bestResult.gapData
+	return bestResult.offsets, bestResult.blob, bestResult.gapData, bestResult.mainBlobStart
 }
 
 // optimizeOverlapForGaps uses greedy superstring algorithm with multi-trial heuristics
@@ -556,7 +577,8 @@ func SerializeWithWaveRemap(
 	numDictEntries := len(encoded.RowDict) / 3
 
 	// Use gap filling if canonical patterns are available, otherwise fall back
-	patternDataStart := PackedPtrsOffset + numPatterns*2
+	packedPtrsOff := PackedPtrsOffset()
+	patternDataStart := packedPtrsOff + numPatterns*2
 
 	var finalOffsets []uint16
 	var mainBlob []byte
@@ -574,7 +596,7 @@ func SerializeWithWaveRemap(
 		instSize := len(encoded.InstrumentData)
 
 		// Place canonical patterns with gap filling
-		canonOffsets, blob, gaps := placePatternDataWithGaps(
+		canonOffsets, blob, gaps, blobStart := placePatternDataWithGaps(
 			encoded.CanonPatterns,
 			encoded.CanonGapCodes,
 			instSize,
@@ -587,6 +609,7 @@ func SerializeWithWaveRemap(
 
 		mainBlob = blob
 		gapData = gaps
+		patternDataStart = blobStart
 
 		// Map canonical offsets back to original pattern indices
 		finalOffsets = make([]uint16, numPatterns)
@@ -681,8 +704,8 @@ func SerializeWithWaveRemap(
 		if i < len(encoded.PatternGapCodes) {
 			gapCode = encoded.PatternGapCodes[i]
 		}
-		output[PackedPtrsOffset+i*2] = byte(pOff & 0xFF)
-		output[PackedPtrsOffset+i*2+1] = byte(pOff>>8) | (gapCode << 5)
+		output[packedPtrsOff+i*2] = byte(pOff & 0xFF)
+		output[packedPtrsOff+i*2+1] = byte(pOff>>8) | (gapCode << 5)
 	}
 
 	// Write pattern data

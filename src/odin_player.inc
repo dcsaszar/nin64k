@@ -70,8 +70,8 @@ zp_dict2         = $20          ; 2 bytes: dict2 (param bytes)
 
 ; Pattern packing constants
 ROW_DICT_OFF        = $78D
-ROW_DICT_SIZE       = 365           ; Max needed with equiv mapping (song 5 = 366 entries, 000000 implicit)
-PACKED_PTRS_OFF     = $BD4          ; = $78D + 365*3, pointers are absolute song-base offsets
+; ROW_DICT_SIZE defined in tables.inc
+PACKED_PTRS_OFF     = ROW_DICT_OFF + ROW_DICT_SIZE * 3
 
 ; Instrument parameter offsets within 16-byte instrument block
 INST_AD          = 0
@@ -1351,13 +1351,13 @@ dar_not_rle:
 @dar_no_carry:
         jsr     checkpoint
         ; Read encoded byte
-        ; Format: $00-$0F = dict[0]+RLE, $10-$EE = dict[1-223], $EF-$FE = RLE, $FF = extended
+        ; Format: $00-$0F = dict[0]+RLE, $10-$EE = dict[1-223], $EF-$FD = RLE, $FE = note-only, $FF = extended
         ldy     #0
         lda     (zp_temp0),y
         cmp     #$10
         bcc     dar_dict_zero_rle   ; $00-$0F: dict[0] with RLE 0-15
         cmp     #$EF
-        bcs     dar_check_rle       ; $EF-$FF: RLE or extended
+        bcs     dar_check_special   ; $EF-$FF: RLE, note-only, or extended
         ; $10-$EE: dict[1-223] - subtract $0F to get actual index (fall through)
         sec
         sbc     #$0F                ; $10->1, $11->2, etc.
@@ -1387,15 +1387,25 @@ dar_dict_zero_rle:
         sta     chn_prev_row_2,x
         inc     chn_src_off,x       ; advance past the byte
         jmp     dar_set_gap
-dar_check_rle:
+dar_check_special:
+        cmp     #$FE
+        beq     dar_note_only
         cmp     #$FF
         beq     dar_extended
-        ; $EF-$FE: RLE 1-16 (repeat prev row)
+        ; $EF-$FD: RLE 1-15 (repeat prev row)
         sec
-        sbc     #$EF                ; count-1 = byte - 0xEF (0-15 remaining after this row)
+        sbc     #$EF                ; count-1 = byte - 0xEF (0-14 remaining after this row)
         sta     chn_rle_count,x
         inc     chn_src_off,x       ; advance past RLE byte
         jmp     dar_set_gap         ; prev_row unchanged, but set up gap zeros
+dar_note_only:
+        ; $FE + note: same inst/eff/param as previous row, new note
+        inc     chn_src_off,x       ; skip $FE marker
+        ldy     #1
+        lda     (zp_temp0),y        ; get note byte (includes effect bit 3)
+        sta     chn_prev_row_0,x    ; update only byte 0 (note), keep bytes 1-2
+        inc     chn_src_off,x       ; skip note byte
+        jmp     dar_set_gap
 dar_extended:
         ; $FF + byte: extended dict index = 224 + next byte
         ; dict[0] implicit, so offset = (224 + byte) - 1 = 223 + byte
