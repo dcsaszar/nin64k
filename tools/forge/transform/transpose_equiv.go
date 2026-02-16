@@ -6,7 +6,19 @@ import (
 	"sort"
 )
 
-func findTransposeEquivalents(song parse.ParsedSong, anal analysis.SongAnalysis, raw []byte) (map[uint16]uint16, map[uint16]int) {
+// TransposeEquivResult holds the result of transpose equivalence analysis.
+type TransposeEquivResult struct {
+	PatternRemap   map[uint16]uint16 // addr -> canonical addr
+	TransposeDelta map[uint16]int    // addr -> transpose delta
+}
+
+// FindTransposeEquivalents finds patterns that are identical except for a constant transpose.
+func FindTransposeEquivalents(song parse.ParsedSong, anal analysis.SongAnalysis, raw []byte) TransposeEquivResult {
+	remap, delta := findTransposeEquivalentsInternal(song, anal, raw)
+	return TransposeEquivResult{PatternRemap: remap, TransposeDelta: delta}
+}
+
+func findTransposeEquivalentsInternal(song parse.ParsedSong, anal analysis.SongAnalysis, raw []byte) (map[uint16]uint16, map[uint16]int) {
 	var sortedAddrs []uint16
 	for addr := range anal.PatternAddrs {
 		sortedAddrs = append(sortedAddrs, addr)

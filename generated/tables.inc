@@ -1,17 +1,13 @@
 ; Auto-generated lookup tables - DO NOT EDIT
 
-; Delta table: 120 bytes
+; Delta table: 63 bytes
 delta_table:
-	.byte	$ED, $EE, $EF, $F0, $F1, $F2, $F3, $F6, $F7, $F9, $FA, $FB, $FC, $FF, $00, $01	; 0
-	.byte	$04, $05, $06, $08, $09, $0A, $0C, $0D, $0E, $0F, $10, $12, $14, $F8, $FD, $FE	; 16
-	.byte	$02, $03, $07, $ED, $EE, $EF, $F0, $F1, $F2, $F3, $F4, $F6, $F7, $FF, $00, $01	; 32
-	.byte	$05, $11, $19, $F5, $F9, $FA, $FC, $FD, $02, $04, $0A, $0C, $0D, $0E, $0F, $10	; 48
-	.byte	$12, $13, $E9, $ED, $EE, $F3, $F4, $F6, $F7, $FE, $FF, $00, $03, $06, $07, $09	; 64
-	.byte	$0B, $16, $26, $F5, $F8, $F9, $FA, $FB, $FC, $FD, $01, $02, $04, $05, $08, $0A	; 80
-	.byte	$36, $0C, $0D, $21, $45, $23, $F0, $F1, $F2, $F4, $F5, $F6, $F7, $F8, $F9, $FE	; 96
-	.byte	$FF, $00, $03, $09, $0B, $0E, $0F, $1E	; 112
+	.byte	$D5, $EE, $EF, $F0, $F1, $F2, $F4, $F9, $FA, $FD, $FE, $FF, $00, $01, $02, $03	; 0
+	.byte	$04, $05, $07, $0C, $0D, $0E, $0F, $10, $11, $12, $DE, $F3, $F5, $F6, $F7, $F8	; 16
+	.byte	$FB, $FC, $06, $08, $09, $0A, $0B, $EF, $F4, $F9, $FA, $FD, $FF, $00, $01, $02	; 32
+	.byte	$03, $E8, $FE, $04, $05, $07, $13, $0C, $0D, $2C, $DA, $1D, $ED, $D2, $1B	; 48
 
-TRACKPTR_START = 21
+TRACKPTR_START = 46
 ROW_DICT_SIZE = 347
 
 ; Transpose table: 45 bytes

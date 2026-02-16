@@ -114,3 +114,53 @@ func findUsedInstruments(freq map[int]int) []int {
 	}
 	return used
 }
+
+// AnalyzeWithOrders performs analysis using pre-computed reachable orders.
+// This only analyzes patterns that are in the specified order list.
+func AnalyzeWithOrders(song parse.ParsedSong, raw []byte, reachableOrders []int) SongAnalysis {
+	analysis := SongAnalysis{
+		EffectUsage:       make(map[byte]int),
+		EffectParams:      make(map[byte]map[byte]int),
+		FSubUsage:         make(map[string]int),
+		PatternAddrs:      make(map[uint16]bool),
+		PatternBreaks:     make(map[uint16]int),
+		PatternJumps:      make(map[uint16]int),
+		InstrumentFreq:    make(map[int]int),
+		FilterTriggerInst: make(map[int]bool),
+		TruncateLimits:    make(map[uint16]int),
+	}
+
+	// Build order map (old index -> new index)
+	analysis.ReachableOrders = reachableOrders
+	analysis.OrderMap = make(map[int]int)
+	for newIdx, oldIdx := range reachableOrders {
+		analysis.OrderMap[oldIdx] = newIdx
+	}
+
+	// Collect pattern addresses from reachable orders
+	for _, orderIdx := range analysis.ReachableOrders {
+		for ch := 0; ch < 3; ch++ {
+			if orderIdx < len(song.Orders[ch]) {
+				addr := song.Orders[ch][orderIdx].PatternAddr
+				analysis.PatternAddrs[addr] = true
+			}
+		}
+	}
+
+	// Analyze patterns
+	for addr := range analysis.PatternAddrs {
+		if pat, ok := song.Patterns[addr]; ok {
+			breakRow, jumpTarget := getPatternBreakInfo(pat)
+			analysis.PatternBreaks[addr] = breakRow
+			analysis.PatternJumps[addr] = jumpTarget
+
+			analyzePatternEffects(&analysis, pat, len(song.Instruments))
+		}
+	}
+
+	analysis.UsedInstruments = findUsedInstruments(analysis.InstrumentFreq)
+	analysis.TruncateLimits = computeTruncateLimits(song, analysis.ReachableOrders, raw)
+
+	return analysis
+}
+

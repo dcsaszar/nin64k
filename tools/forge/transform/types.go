@@ -32,6 +32,7 @@ type TransformOptions struct {
 	TonePortaEffect  byte
 	EquivMap         map[string]string
 	OptimizeInst     bool
+	TransposeEquiv   *TransposeEquivResult // Pre-computed transpose equivalence (optional)
 }
 
 type TransformedSong struct {

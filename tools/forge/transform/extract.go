@@ -8,7 +8,7 @@ import (
 )
 
 func ExtractRawPatternsAsBytes(song parse.ParsedSong, anal analysis.SongAnalysis, raw []byte) ([][]byte, []int) {
-	canonicalPatterns, _ := findTransposeEquivalents(song, anal, raw)
+	canonicalPatterns, _ := findTransposeEquivalentsInternal(song, anal, raw)
 
 	uniqueCanonical := make(map[uint16]bool)
 	for _, canonical := range canonicalPatterns {
@@ -47,7 +47,7 @@ func ExtractRawPatternsAsBytes(song parse.ParsedSong, anal analysis.SongAnalysis
 }
 
 func ExtractPatternsAsBytes(song parse.ParsedSong, anal analysis.SongAnalysis, raw []byte, effectRemap [16]byte, fSubRemap map[int]byte, instRemap []int) ([][]byte, []int) {
-	canonicalPatterns, _ := findTransposeEquivalents(song, anal, raw)
+	canonicalPatterns, _ := findTransposeEquivalentsInternal(song, anal, raw)
 
 	uniqueCanonical := make(map[uint16]bool)
 	for _, canonical := range canonicalPatterns {

@@ -9,7 +9,7 @@ import (
 )
 
 func Transform(song parse.ParsedSong, anal analysis.SongAnalysis, raw []byte, opts TransformOptions) TransformedSong {
-	effectRemap, fSubRemap, permArpEffect, portaUpEffect, portaDownEffect, tonePortaEffect := BuildGlobalEffectRemap([]analysis.SongAnalysis{anal})
+	effectRemap, fSubRemap, permArpEffect, portaUpEffect, portaDownEffect, tonePortaEffect := BuildGlobalEffectRemap()
 	opts.PermArpEffect = permArpEffect
 	opts.PortaUpEffect = portaUpEffect
 	opts.PortaDownEffect = portaDownEffect
@@ -29,7 +29,14 @@ func TransformWithGlobalEffects(song parse.ParsedSong, anal analysis.SongAnalysi
 	numInst := len(song.Instruments)
 	result.InstRemap, result.MaxUsedSlot = BuildInstRemap(anal, numInst)
 
-	canonicalPatterns, transposeDelta := findTransposeEquivalents(song, anal, raw)
+	var canonicalPatterns map[uint16]uint16
+	var transposeDelta map[uint16]int
+	if opts.TransposeEquiv != nil {
+		canonicalPatterns = opts.TransposeEquiv.PatternRemap
+		transposeDelta = opts.TransposeEquiv.TransposeDelta
+	} else {
+		canonicalPatterns, transposeDelta = findTransposeEquivalentsInternal(song, anal, raw)
+	}
 	result.TransposeDelta = transposeDelta
 
 	for addr, canonical := range canonicalPatterns {

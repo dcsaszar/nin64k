@@ -400,6 +400,7 @@ func testEquivConfig(
 		ps.Transformed,
 		encoded,
 		testFrames,
+		startConst,
 	)
 	return ok
 }

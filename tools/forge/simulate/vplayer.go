@@ -58,6 +58,7 @@ type VirtualPlayer struct {
 	deltaTable     []byte
 	transposeTable []byte
 	waveTable      []byte
+	startConst     int
 
 	// Channel state
 	chn [3]channelState
@@ -156,12 +157,14 @@ func NewVirtualPlayer(
 	deltaTable, transposeTable, waveTable []byte,
 	transformed transform.TransformedSong,
 	encoded encode.EncodedSong,
+	startConst int,
 ) *VirtualPlayer {
 	vp := &VirtualPlayer{
 		songName:        songName,
 		deltaTable:      deltaTable,
 		transposeTable:  transposeTable,
 		waveTable:       waveTable,
+		startConst:      startConst,
 		speed:           6,
 		speedCounter:    5, // speed - 1, so first frame triggers row processing
 		forceNewPattern: true, // First frame goes to newpattern which sets row=0
@@ -316,7 +319,7 @@ func (vp *VirtualPlayer) initOrder(orderNum int) {
 			delta := int8(vp.deltaTable[dIdx])
 			if orderNum == 0 {
 				// First order uses start constant
-				vp.chn[ch].trackptr = byte(int(21) + int(delta)) // TRACKPTR_START = 21
+				vp.chn[ch].trackptr = byte(vp.startConst + int(delta))
 			} else {
 				vp.chn[ch].trackptr = byte(int(vp.chn[ch].trackptr) + int(delta))
 			}
@@ -1478,8 +1481,9 @@ func CompareVirtual(
 	transformed transform.TransformedSong,
 	encoded encode.EncodedSong,
 	frames int,
+	startConst int,
 ) (bool, int, string) {
-	return CompareVirtualDebug(songName, origWrites, songData, deltaTable, transposeTable, waveTable, transformed, encoded, frames, false)
+	return CompareVirtualDebug(songName, origWrites, songData, deltaTable, transposeTable, waveTable, transformed, encoded, frames, startConst, false)
 }
 
 func CompareVirtualDebug(
@@ -1490,10 +1494,11 @@ func CompareVirtualDebug(
 	transformed transform.TransformedSong,
 	encoded encode.EncodedSong,
 	frames int,
+	startConst int,
 	debug bool,
 ) (bool, int, string) {
 	vpDebug = debug || vpDebugSong != ""
-	vp := NewVirtualPlayer(songName, songData, deltaTable, transposeTable, waveTable, transformed, encoded)
+	vp := NewVirtualPlayer(songName, songData, deltaTable, transposeTable, waveTable, transformed, encoded, startConst)
 	vpWrites := vp.RunFrames(frames)
 
 	// Debug: show writes around mismatch
