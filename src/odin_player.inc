@@ -27,13 +27,13 @@ zp_dict2         = $20          ; 2 bytes: dict2 (param bytes)
 
 ; Song format: fixed offsets (all tables deduplicated)
 ; $000: Instruments 1-31 (496 bytes), inst N at (N-1)*16
-; $1F0: Order bitstream (4 bytes per order, max 255 orders = 1020 bytes, ends at $5EC)
-;       Only 27 bits used per order (5 wasted); could save ~159 bytes with bit packing
-; $5EC: Filtertable (227 bytes max)
-; $6CF: Arptable (188 bytes max)
-; $78B: Transpose base, $78C: Delta base
-; $78D: Row dict0 (365 bytes), $8FA: dict1, $A67: dict2
-; $BD4: Packed pattern data pointers
+; $1F0: Order bitstream (4 bytes per order, max 119 orders = 476 bytes, ends at $3CC)
+;       Only 27 bits used per order (5 wasted); could save ~59 bytes with bit packing
+; $3CC: Filtertable (227 bytes max)
+; $4AF: Arptable (188 bytes max)
+; $56B: Transpose base, $56C: Delta base
+; $56D: Row dict0 (ROW_DICT_SIZE bytes), dict1, dict2
+; Packed pattern data pointers follow dict2
 ;
 ; Global wavetable (163 bytes) is stored in player, shared across all songs.
 ; Instrument wave indices point directly into global_wavetable.
@@ -69,7 +69,7 @@ zp_dict2         = $20          ; 2 bytes: dict2 (param bytes)
 ;   -> effect = (1<<5>>5) | (($00>>4)&8) = 1 | 0 = 1 (arpeggio $49)
 
 ; Pattern packing constants
-ROW_DICT_OFF        = $78D
+ROW_DICT_OFF        = $56D
 ; ROW_DICT_SIZE defined in tables.inc
 PACKED_PTRS_OFF     = ROW_DICT_OFF + ROW_DICT_SIZE * 3
 
@@ -109,16 +109,16 @@ player_init:
         ; Patch table addresses (SMC)
         lda     zp_song_base+1
         clc
-        adc     #5                      ; A = base + 5
-        sta     filter_load+2           ; $5EC high byte
-        lda     #$EC
-        sta     filter_load+1           ; $5EC low byte
+        adc     #3                      ; A = base + 3
+        sta     filter_load+2           ; $3CC high byte
+        lda     #$CC
+        sta     filter_load+1           ; $3CC low byte
         lda     zp_song_base+1
         clc
-        adc     #6                      ; A = base + 6
-        sta     arp_load_addr+1         ; $6CF high byte
-        lda     #$CF
-        sta     arp_load_addr           ; $6CF low byte
+        adc     #4                      ; A = base + 4
+        sta     arp_load_addr+1         ; $4AF high byte
+        lda     #$AF
+        sta     arp_load_addr           ; $4AF low byte
         lda     #$00
         sta     zp_song_base
         ; Clear player variables
@@ -168,17 +168,17 @@ player_init:
         sta     chn_trackptr_cur+0
         sta     chn_trackptr_cur+1
         sta     chn_trackptr_cur+2
-        ; Load transpose base from song data ($78B)
+        ; Load transpose base from song data ($56B)
         lda     zp_song_base+1
         clc
-        adc     #7
+        adc     #5
         sta     zp_ptr+1
-        lda     #$8B
+        lda     #$6B
         sta     zp_ptr
         ldy     #0
         lda     (zp_ptr),y
         sta     transpose_base
-        iny                         ; Y = 1, read from $78C
+        iny                         ; Y = 1, read from $56C
         lda     (zp_ptr),y
         sta     delta_base
         jsr     checkpoint

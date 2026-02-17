@@ -28,10 +28,10 @@ const (
 // Buffer layout constants for dual-buffer decompression
 //
 // Memory layout:
-//   Buffer 1 (odd songs):  $2000-$3BFF  ($1C00 bytes)
-//   Buffer 2 (even songs): $3C00-$57FF  ($1C00 bytes)
+//   Buffer 1 (odd songs):  $2000-$35FF  ($1600 bytes)
+//   Buffer 2 (even songs): $3600-$4BFF  ($1600 bytes)
 //
-// Buffer length = buffer distance = $1C00 (7168 bytes)
+// Buffer length = buffer distance = $1600 (5632 bytes)
 //
 // To change buffer addresses:
 //   1. Update these constants
@@ -40,18 +40,18 @@ const (
 //   4. Run: go run ./cmd/compress && make clean && make
 const (
 	DecompBuf1Hi   = 0x20                         // Buffer 1 high byte ($2000)
-	DecompBuf2Hi   = 0x3B                         // Buffer 2 high byte ($3B00)
-	DecompBufSize  = DecompBuf2Hi - DecompBuf1Hi  // Buffer size ($1B00 >> 8 = 6912 bytes)
-	DecompWrapHi   = DecompBuf2Hi + DecompBufSize // Wrap threshold ($5A00)
-	DecompWrapAdj  = DecompWrapHi - DecompBuf1Hi  // Wrap adjustment ($3A)
+	DecompBuf2Hi   = 0x36                         // Buffer 2 high byte ($3600)
+	DecompBufSize  = DecompBuf2Hi - DecompBuf1Hi  // Buffer size ($1600 >> 8 = 5632 bytes)
+	DecompWrapHi   = DecompBuf2Hi + DecompBufSize // Wrap threshold ($4C00)
+	DecompWrapAdj  = DecompWrapHi - DecompBuf1Hi  // Wrap adjustment ($2C)
 )
 
 // Terminator detection: must be > max gamma zeros in compressed data
 // X counts down from 1: after N zeros, X = 1-(N+1) = -N (mod 256)
 // Threshold = 256 - terminatorZeros detects exactly terminatorZeros consecutive zeros
 const (
-	TerminatorZeros     = 10   // number of zero bits that signal terminator
-	terminatorThreshold = 256 - TerminatorZeros // $F6 for 10 zeros
+	TerminatorZeros     = 11   // number of zero bits that signal terminator
+	terminatorThreshold = 256 - TerminatorZeros // $F5 for 11 zeros
 )
 
 // zpName returns the symbolic name for a zero page address
@@ -403,12 +403,12 @@ func WriteDecompressorAsmWithCycleStats(path string, lowestMaxGapOffset int, max
 ; Minimal: checkpoint: rts
 
 ; Buffer layout (dual-buffer decompression)
-;   Buffer 1 (odd songs):  $%04X-$%04X  ($1C00 bytes)
-;   Buffer 2 (even songs): $%04X-$%04X  ($1C00 bytes)
+;   Buffer 1 (odd songs):  $%04X-$%04X  ($1600 bytes)
+;   Buffer 2 (even songs): $%04X-$%04X  ($1600 bytes)
 ; To change: update constants in cmd/compress/decompress6502.go, then rebuild
 DECOMP_BUF1_HI   = $%02X           ; Buffer 1 high byte
 DECOMP_BUF2_HI   = $%02X           ; Buffer 2 high byte
-DECOMP_BUF_SIZE  = $%02X           ; Buffer size ($1C00 >> 8)
+DECOMP_BUF_SIZE  = $%02X           ; Buffer size ($1600 >> 8)
 DECOMP_WRAP_HI   = $%02X           ; Wrap threshold (buf2 + size)
 
 ; Internal zero page variables

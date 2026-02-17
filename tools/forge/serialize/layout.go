@@ -3,11 +3,12 @@ package serialize
 const (
 	InstOffset      = 0x000
 	BitstreamOffset = 0x1F0
-	FilterOffset    = 0x5EC
-	ArpOffset       = 0x6CF
-	TransBaseOffset = 0x78B
-	DeltaBaseOffset = 0x78C
-	RowDictOffset   = 0x78D
+	MaxOrders       = 119
+	FilterOffset    = 0x3CC
+	ArpOffset       = 0x4AF
+	TransBaseOffset = 0x56B
+	DeltaBaseOffset = 0x56C
+	RowDictOffset   = 0x56D
 
 	MaxFilterSize = 227
 	MaxArpSize    = 188

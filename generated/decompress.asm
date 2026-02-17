@@ -12,13 +12,13 @@
 ; Minimal: checkpoint: rts
 
 ; Buffer layout (dual-buffer decompression)
-;   Buffer 1 (odd songs):  $2000-$3AFF  ($1C00 bytes)
-;   Buffer 2 (even songs): $3B00-$55FF  ($1C00 bytes)
+;   Buffer 1 (odd songs):  $2000-$35FF  ($1600 bytes)
+;   Buffer 2 (even songs): $3600-$4BFF  ($1600 bytes)
 ; To change: update constants in cmd/compress/decompress6502.go, then rebuild
 DECOMP_BUF1_HI   = $20           ; Buffer 1 high byte
-DECOMP_BUF2_HI   = $3B           ; Buffer 2 high byte
-DECOMP_BUF_SIZE  = $1B           ; Buffer size ($1C00 >> 8)
-DECOMP_WRAP_HI   = $56           ; Wrap threshold (buf2 + size)
+DECOMP_BUF2_HI   = $36           ; Buffer 2 high byte
+DECOMP_BUF_SIZE  = $16           ; Buffer size ($1600 >> 8)
+DECOMP_WRAP_HI   = $4C           ; Wrap threshold (buf2 + size)
 
 ; Internal zero page variables
 zp_val_lo       = $07
@@ -147,7 +147,7 @@ read_expgol:
         sty     zp_val_hi
 count_zeros:
         dex
-        cpx     #$F6
+        cpx     #$F5
         beq     terminator
         jsr     read_bit
         bcc     count_zeros
