@@ -1,6 +1,9 @@
 package simulate
 
-import "forge/serialize"
+import (
+	"fmt"
+	"forge/serialize"
+)
 
 // MinimalPlayer is a clean, minimal implementation of the SID player.
 // It tracks only essential state needed for playback.
@@ -13,6 +16,7 @@ type MinimalPlayer struct {
 	patternPtr []uint16 // Pattern offsets (absolute into fullData)
 	patternGap []byte   // Gap codes per pattern
 	filterTbl  []byte
+	debugMode  bool     // Enable debug logging
 	arpTbl     []byte
 	waveTbl    []byte
 	transTbl   []byte
@@ -106,6 +110,16 @@ func NewMinimalPlayer(
 	deltaTbl, transTbl, waveTbl []byte,
 	startConst int,
 ) *MinimalPlayer {
+	return NewMinimalPlayerWithDebug(songData, numPatterns, deltaTbl, transTbl, waveTbl, startConst, false)
+}
+
+func NewMinimalPlayerWithDebug(
+	songData []byte,
+	numPatterns int,
+	deltaTbl, transTbl, waveTbl []byte,
+	startConst int,
+	debugMode bool,
+) *MinimalPlayer {
 	p := &MinimalPlayer{
 		speed:      6,
 		speedCtr:   5,  // triggers row on frame 0
@@ -116,6 +130,7 @@ func NewMinimalPlayer(
 		deltaTbl:   deltaTbl,
 		waveTbl:    waveTbl,
 		startConst: startConst,
+		debugMode:  debugMode,
 	}
 
 	p.parseSongData(songData, numPatterns)
@@ -325,6 +340,11 @@ func (p *MinimalPlayer) advanceStream(ch int) (int, byte) {
 func (p *MinimalPlayer) Tick() []SIDWrite {
 	p.writes = nil
 
+	if p.debugMode && p.frame == 0 {
+		fmt.Printf("[VPlayer pre-f0] speedCtr=%d speed=%d forceNewPattern=%v\n",
+			p.speedCtr, p.speed, p.forceNewPattern)
+	}
+
 	// Mod3 counter (for pulse width modulation)
 	p.mod3--
 	if p.mod3 < 0 {
@@ -336,10 +356,19 @@ func (p *MinimalPlayer) Tick() []SIDWrite {
 	if p.speedCtr >= p.speed {
 		p.speedCtr = 0
 		p.advanceRow()
+		if p.debugMode && p.frame == 0 {
+			fmt.Printf("[VPlayer post-advance] ch0.playing=$%02X ch0.trans=%d\n",
+				p.ch[0].playing, p.ch[0].trans)
+		}
 	}
 
 	// Per-frame effects (wave, arp, pulse modulation)
 	p.processFrame()
+
+	if p.debugMode && p.frame == 0 {
+		fmt.Printf("[VPlayer post-process] ch0.freqLo=$%02X ch0.freqHi=$%02X\n",
+			p.ch[0].freqLo, p.ch[0].freqHi)
+	}
 
 	// HR lookahead (after processFrame, matching ASM player order)
 	p.hrLookahead()
@@ -896,6 +925,9 @@ func (p *MinimalPlayer) outputSID() {
 
 		p.write(base+2, c.plsLo)
 		p.write(base+3, c.plsHi)
+		if p.debugMode && p.frame == 0 && ch == 0 {
+			fmt.Printf("[VPlayer] write f%d ch%d: $D400=$%02X (finFreqLo)\n", p.frame, ch, c.finFreqLo)
+		}
 		p.write(base+0, c.finFreqLo)
 		p.write(base+1, c.finFreqHi)
 		p.write(base+4, c.wave&c.gate) // waveform AND gate

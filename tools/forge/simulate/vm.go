@@ -8,6 +8,13 @@ type SIDWrite struct {
 	Frame int
 }
 
+type DataRead struct {
+	Addr  uint16
+	Value byte
+	PC    uint16
+	Frame int
+}
+
 type CPU6502 struct {
 	A, X, Y      byte
 	SP           byte
@@ -22,6 +29,10 @@ type CPU6502 struct {
 	DataCoverage map[uint16]bool
 	DataBase     uint16
 	DataSize     int
+
+	// Circular buffer for tracking recent song data reads
+	DataReadHistory []DataRead
+	DataReadIndex   int
 
 	RedundantCLC map[uint16]int
 	RedundantSEC map[uint16]int
@@ -64,6 +75,18 @@ func (c *CPU6502) Read(addr uint16) byte {
 		c.DataCoverage[addr] = true
 	}
 	val := c.Memory[addr]
+
+	// Track song data reads in circular buffer
+	if c.DataReadHistory != nil && addr >= c.DataBase && int(addr-c.DataBase) < c.DataSize {
+		c.DataReadHistory[c.DataReadIndex] = DataRead{
+			Addr:  addr,
+			Value: val,
+			PC:    c.PC - 1, // PC of instruction that did the read
+			Frame: c.CurrentFrame,
+		}
+		c.DataReadIndex = (c.DataReadIndex + 1) % len(c.DataReadHistory)
+	}
+
 	if DebugReadAddr != 0 && addr >= DebugReadAddr && addr <= DebugReadAddr+DebugReadRange && c.CurrentFrame >= DebugFrameRange[0] && c.CurrentFrame <= DebugFrameRange[1] {
 		fmt.Printf("    [ASM f%d] READ $%04X = %02X\n", c.CurrentFrame, addr, val)
 	}
@@ -381,4 +404,29 @@ func FindInstructionStarts(code []byte, base uint16) []uint16 {
 		}
 	}
 	return starts
+}
+
+// DumpDataReadHistory prints the last N song data reads in chronological order
+func (c *CPU6502) DumpDataReadHistory(maxEntries int) {
+	if c.DataReadHistory == nil || len(c.DataReadHistory) == 0 {
+		return
+	}
+
+	// Find oldest entry in circular buffer
+	start := c.DataReadIndex
+	count := len(c.DataReadHistory)
+	if maxEntries > 0 && maxEntries < count {
+		start = (c.DataReadIndex - maxEntries + len(c.DataReadHistory)) % len(c.DataReadHistory)
+		count = maxEntries
+	}
+
+	fmt.Printf("    Last %d song data reads:\n", count)
+	for i := 0; i < count; i++ {
+		idx := (start + i) % len(c.DataReadHistory)
+		r := c.DataReadHistory[idx]
+		if r.Addr != 0 || r.Value != 0 { // Skip uninitialized entries
+			fmt.Printf("      [f%d PC=$%04X] $%04X = $%02X (offset $%04X)\n",
+				r.Frame, r.PC, r.Addr, r.Value, r.Addr-c.DataBase)
+		}
+	}
 }

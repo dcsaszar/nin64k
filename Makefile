@@ -61,8 +61,7 @@ $(SID_FILE): $(SID_OBJ) $(SID_CFG)
 	$(LD) -C $(SID_CFG) -o $@ $<
 
 test:
-	$(MAKE) -C tools/odin_convert
-	cd tools/odin_convert && ./bin/odin_convert
+	cd tools/forge && go run .
 
 forge:
 	cd tools/forge && go run .

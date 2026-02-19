@@ -127,8 +127,10 @@ func TestSong(cfg *Config, songNum int, rawData, convertedData, playerData []byt
 	cpuNew := simulate.NewCPU()
 	cpuNew.Coverage = make(map[uint16]bool)
 	cpuNew.DataCoverage = make(map[uint16]bool)
-	cpuNew.DataBase = playerBase
-	cpuNew.DataSize = len(playerData)
+	cpuNew.DataBase = bufferBase
+	cpuNew.DataSize = len(convertedData)
+	cpuNew.DataReadHistory = make([]simulate.DataRead, 200) // Track last 200 song data reads
+	cpuNew.DataReadIndex = 0
 	cpuNew.RedundantCLC = make(map[uint16]int)
 	cpuNew.RedundantSEC = make(map[uint16]int)
 	cpuNew.TotalCLC = make(map[uint16]int)
@@ -149,7 +151,24 @@ func TestSong(cfg *Config, songNum int, rawData, convertedData, playerData []byt
 	prevCycles := cpuNew.Cycles
 	for i := 0; i < testFrames; i++ {
 		cpuNew.CurrentFrame = i
+		// Clear read history at frame 0 to only track actual playback
+		if i == 0 {
+			cpuNew.DataReadIndex = 0
+			for j := range cpuNew.DataReadHistory {
+				cpuNew.DataReadHistory[j] = simulate.DataRead{}
+			}
+		}
 		cpuNew.Call(playerBase + 3)
+		// Debug: capture first SID write for channel 0 freq
+		if i == 0 && songNum == 1 {
+			sidWrites := cpuNew.SIDWrites[len(cpuNew.SIDWrites)-len(cpuNew.SIDWrites):]
+			for idx, w := range sidWrites {
+				if w.Addr == 0xD400 {
+					fmt.Printf("[ASM] write[%d] f%d: $D400=$%02X\n", idx, i, w.Value)
+					break
+				}
+			}
+		}
 		frameCycles := cpuNew.Cycles - prevCycles
 		if frameCycles > maxFrameCycles {
 			maxFrameCycles = frameCycles
@@ -222,6 +241,9 @@ func TestSong(cfg *Config, songNum int, rawData, convertedData, playerData []byt
 					pos := frameMap[frame]
 					verify.DumpRowAtPosition(transformed, encoded, pos.Order, pos.Row)
 				}
+
+				// Dump recent song data reads
+				cpuNew.DumpDataReadHistory(30)
 
 				cpuDebug := simulate.NewCPU()
 				copy(cpuDebug.Memory[bufferBase:], convertedData)
@@ -390,7 +412,7 @@ func testEquivConfig(
 		startConst,
 	)
 
-	ok, _, _ := simulate.CompareVirtual(
+	ok, _, _ := simulate.CompareVirtualWithDebug(
 		origWrites,
 		output,
 		deltaBytes,
@@ -399,6 +421,7 @@ func testEquivConfig(
 		len(encoded.PatternOffsets),
 		testFrames,
 		startConst,
+		songNum == 1, // Enable debug for song 1
 	)
 	return ok
 }

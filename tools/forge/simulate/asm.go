@@ -44,7 +44,7 @@ func GetOriginalWrites(rawData []byte, songNum int, testFrames int) []SIDWrite {
 	return cpu.RunFrames(playAddr, testFrames)
 }
 
-func ReportASMStats(allStats []*ASMStats, playerData []byte) {
+func ReportASMStats(allStats []*ASMStats, playerData []byte) bool {
 	playerBase := uint16(0xF000)
 
 	mergedCoverage := make(map[uint16]bool)
@@ -93,9 +93,12 @@ func ReportASMStats(allStats []*ASMStats, playerData []byte) {
 		}
 	}
 	fmt.Printf("\nCode coverage: %d/%d instructions executed\n", len(instrStarts)-len(uncovered), len(instrStarts))
-	if len(uncovered) > 0 && len(uncovered) <= 10 {
-		fmt.Printf("Uncovered instructions:")
-		for _, addr := range uncovered {
+	if len(uncovered) > 0 {
+		fmt.Printf("Uncovered instructions (%d):", len(uncovered))
+		for i, addr := range uncovered {
+			if i%16 == 0 {
+				fmt.Printf("\n ")
+			}
 			fmt.Printf(" $%04X", addr)
 		}
 		fmt.Println()
@@ -169,4 +172,7 @@ func ReportASMStats(allStats []*ASMStats, playerData []byte) {
 	if worstGap > 0 {
 		fmt.Printf("\nSlowest checkpoint: %d cycles (from $%04X to $%04X)\n", worstGap, worstGapFrom, worstGapTo)
 	}
+
+	// Return true only if 100% code coverage achieved
+	return len(uncovered) == 0
 }

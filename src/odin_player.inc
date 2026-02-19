@@ -373,9 +373,10 @@ pattern_ok:
         jsr     checkpoint
         ldx     #2
 @fetch_channel_rows:
-        lda     decode_buffer_lo,x
+        ; Use pointer system directly
+        lda     chn_row_ptr_lo,x
         sta     zp_trackptr
-        lda     decode_buffer_hi,x
+        lda     chn_row_ptr_hi,x
         sta     zp_trackptr+1
 
         ldy     #0
@@ -987,33 +988,26 @@ filtdone:
         stx     hrtrackrow
         sty     hrordernumber
         stx     decode_row
-        ; Check if hrtrackrow == 0 (pattern boundary)
-        bne     @hr_within
-        jmp     @hr_boundary
 @hr_within:
         ; Within pattern: check if prefetch is valid
         lda     prefetch_done
-        bmi     @hr_prefetch_valid
-        jmp     @hr_no_prefetch
-@hr_prefetch_valid:
+        bpl     @hr_no_prefetch
         lda     prefetch_order
         cmp     hrordernumber
-        beq     :+
-        jmp     @hr_no_prefetch
-:       lda     prefetch_row
+        bne     @hr_no_prefetch
+        lda     prefetch_row
         cmp     hrtrackrow
-        beq     :+
-        jmp     @hr_no_prefetch
-:       ; Prefetch valid - use decode buffers directly
+        bne     @hr_no_prefetch
+        ; Prefetch valid - use row pointers directly
         lda     speedcounter
         clc
         adc     chn_hardrestart+0
         cmp     speed
         bcs     :+
         jmp     @hr1_pf
-:       lda     decode_buffer_lo
+:       lda     chn_row_ptr_lo
         sta     zp_trackptr
-        lda     decode_buffer_hi
+        lda     chn_row_ptr_hi
         sta     zp_trackptr+1
         ldx     #0
         jsr     check_hardrestart
@@ -1025,9 +1019,9 @@ filtdone:
         cmp     speed
         bcs     :+
         jmp     @hr2_pf
-:       lda     decode_buffer_lo+1
+:       lda     chn_row_ptr_lo+1
         sta     zp_trackptr
-        lda     decode_buffer_hi+1
+        lda     chn_row_ptr_hi+1
         sta     zp_trackptr+1
         ldx     #1
         jsr     check_hardrestart
@@ -1038,9 +1032,9 @@ filtdone:
         cmp     speed
         bcs     :+
         jmp     @dump
-:       lda     decode_buffer_lo+2
+:       lda     chn_row_ptr_lo+2
         sta     zp_trackptr
-        lda     decode_buffer_hi+2
+        lda     chn_row_ptr_hi+2
         sta     zp_trackptr+1
         ldx     #2
         jsr     check_hardrestart
@@ -1087,53 +1081,6 @@ filtdone:
         ldx     #2
         jsr     check_hardrestart
         jmp     @dump
-@hr_boundary:
-        ; Pattern boundary: read HR skip mask once
-        ldx     ordernumber
-        jsr     decode_order_bitstream
-        lda     bs_byte3
-        lsr     a
-        lsr     a
-        lsr     a                   ; HR skip mask now in bits 0-2
-        sta     hr_skip_mask
-        ; Check each channel with mask
-        lda     speedcounter
-        clc
-        adc     chn_hardrestart+0
-        cmp     speed
-        bcc     @hr_b1
-        lda     hr_skip_mask
-        lsr     a                   ; Shift bit 0 into carry
-        bcs     @hr_b1              ; Skip if bit was set
-        ldx     #0
-        jsr     do_hardrestart
-@hr_b1:
-        jsr     checkpoint
-        lda     speedcounter
-        clc
-        adc     chn_hardrestart+1
-        cmp     speed
-        bcc     @hr_b2
-        lda     hr_skip_mask
-        lsr     a
-        lsr     a                   ; Shift bit 1 into carry
-        bcs     @hr_b2
-        ldx     #1
-        jsr     do_hardrestart
-@hr_b2:
-        lda     speedcounter
-        clc
-        adc     chn_hardrestart+2
-        cmp     speed
-        bcc     @dump
-        lda     hr_skip_mask
-        lsr     a
-        lsr     a
-        lsr     a                   ; Shift bit 2 into carry
-        bcs     @dump
-        ldx     #2
-        jsr     do_hardrestart
-
 @dump:
         ldx     #$00
 @dumploop:
@@ -1374,9 +1321,10 @@ gto_need_decode:
         sta     chn_src_off,x
         sta     chn_rle_count,x
         sta     chn_gap_remaining,x
-        sta     chn_prev_row_0,x
-        sta     chn_prev_row_1,x
-        sta     chn_prev_row_2,x
+        ldy     times3_table,x
+        sta     chn_prev_row,y
+        sta     chn_prev_row+1,y
+        sta     chn_prev_row+2,y
         lda     #$ff
         sta     chn_decoded_row,x   ; mark as "before row 0"
         ; Skip to target row
@@ -1393,43 +1341,35 @@ gto_advance_one:
         jsr     decode_advance_row
         jsr     checkpoint
 gto_store_to_buffer:
-        ; Set up decode buffer pointer (common to both paths)
-        lda     decode_buffer_lo,x
-        sta     zp_temp1
-        lda     decode_buffer_hi,x
-        sta     zp_temp1+1
         ; Check if this is a gap zero (zp_is_gap_zero set by decode_advance_row)
         lda     zp_is_gap_zero
         beq     @copy_prev_row
-        ; Gap zero: output zeros (loop, stores in reverse order)
-        lda     #0
-        ldy     #2
-@gap_loop:
-        sta     (zp_temp1),y
-        dey
-        bpl     @gap_loop
-        bmi     @store_done             ; always taken (Y=$FF)
+        ; Gap zero: Point to zero_row_data
+        lda     #<zero_row_data
+        sta     chn_row_ptr_lo,x
+        lda     #>zero_row_data
+        sta     chn_row_ptr_hi,x
+        jmp     @store_done
 @copy_prev_row:
-        ; Normal row: copy prev_row to decode buffer
-        ldy     #0
-        lda     chn_prev_row_0,x
-        sta     (zp_temp1),y
-        iny
-        lda     chn_prev_row_1,x
-        sta     (zp_temp1),y
-        iny
-        lda     chn_prev_row_2,x
-        sta     (zp_temp1),y
+        ; Normal row: Point to this channel's chn_prev_row
+        ldy     times3_table,x
+        tya
+        clc
+        adc     #<chn_prev_row
+        sta     chn_row_ptr_lo,x
+        lda     #0
+        adc     #>chn_prev_row
+        sta     chn_row_ptr_hi,x
 @store_done:
         ; Update decoded row
         lda     decode_row
         sta     chn_decoded_row,x
 gto_already_decoded:
         jsr     checkpoint
-        ; Set zp_trackptr to channel's decode buffer
-        lda     decode_buffer_lo,x
+        ; Set zp_trackptr from channel's row pointer
+        lda     chn_row_ptr_lo,x
         sta     zp_trackptr
-        lda     decode_buffer_hi,x
+        lda     chn_row_ptr_hi,x
         sta     zp_trackptr+1
         rts
 
@@ -1495,14 +1435,32 @@ dar_not_rle:
         ; Fall through to dar_copy_dict_entry
 ; Copy dict entry A to prev_row (A = offset into split dicts)
 ; Split dict format: 3 separate arrays indexed by Y
+; ALSO computes pointer to dict for parallel system
 dar_copy_dict_entry:
         tay
+        ; Compute pointer: zp_dict0 + Y
+        tya
+        clc
+        adc     zp_dict0
+        sta     chn_row_ptr_lo,x    ; PARALLEL: store pointer lo
+        lda     zp_dict0+1
+        adc     #0
+        sta     chn_row_ptr_hi,x    ; PARALLEL: store pointer hi
+        ; Read dict bytes (Y = dict index)
         lda     (zp_dict0),y
-        sta     chn_prev_row_0,x
+        pha
         lda     (zp_dict1),y
-        sta     chn_prev_row_1,x
+        pha
         lda     (zp_dict2),y
-        sta     chn_prev_row_2,x
+        pha
+        ; Store to consecutive prev_row (Y = channel * 3)
+        ldy     times3_table,x
+        pla
+        sta     chn_prev_row+2,y
+        pla
+        sta     chn_prev_row+1,y
+        pla
+        sta     chn_prev_row,y
         inc     chn_src_off,x       ; advance past dict index byte
         jmp     dar_set_gap
 dar_dict_zero_rle:
@@ -1510,10 +1468,11 @@ dar_dict_zero_rle:
         ; A = RLE count (0 = just dict[0], 1 = dict[0] + 1 repeat, etc.)
         ; dict[0] is always [0,0,0], not stored in memory
         sta     chn_rle_count,x     ; store RLE count for subsequent calls
+        ldy     times3_table,x
         lda     #0
-        sta     chn_prev_row_0,x
-        sta     chn_prev_row_1,x
-        sta     chn_prev_row_2,x
+        sta     chn_prev_row,y
+        sta     chn_prev_row+1,y
+        sta     chn_prev_row+2,y
         inc     chn_src_off,x       ; advance past the byte
         jmp     dar_set_gap
 dar_check_special:
@@ -1532,7 +1491,10 @@ dar_note_only:
         inc     chn_src_off,x       ; skip $FE marker
         ldy     #1
         lda     (zp_temp0),y        ; get note byte (includes effect bit 3)
-        sta     chn_prev_row_0,x    ; update only byte 0 (note), keep bytes 1-2
+        pha
+        ldy     times3_table,x
+        pla
+        sta     chn_prev_row,y      ; update only byte 0 (note), keep bytes 1-2
         inc     chn_src_off,x       ; skip note byte
         jmp     dar_set_gap
 dar_extended:
@@ -1559,24 +1521,39 @@ dar_copy_dict_entry_16:
         inc     zp_dict1+1
         inc     zp_dict2+1
         lda     (zp_dict0),y
-        sta     chn_prev_row_0,x
+        pha
         lda     (zp_dict1),y
-        sta     chn_prev_row_1,x
+        pha
         lda     (zp_dict2),y
-        sta     chn_prev_row_2,x
+        pha
         ; Restore dict pointers
         dec     zp_dict0+1
         dec     zp_dict1+1
         dec     zp_dict2+1
+        ; Store to consecutive prev_row
+        ldy     times3_table,x
+        pla
+        sta     chn_prev_row+2,y
+        pla
+        sta     chn_prev_row+1,y
+        pla
+        sta     chn_prev_row,y
         inc     chn_src_off,x       ; advance past extended byte
         jmp     dar_set_gap
 dar_ext_direct:
         lda     (zp_dict0),y
-        sta     chn_prev_row_0,x
+        pha
         lda     (zp_dict1),y
-        sta     chn_prev_row_1,x
+        pha
         lda     (zp_dict2),y
-        sta     chn_prev_row_2,x
+        pha
+        ldy     times3_table,x
+        pla
+        sta     chn_prev_row+2,y
+        pla
+        sta     chn_prev_row+1,y
+        pla
+        sta     chn_prev_row,y
         inc     chn_src_off,x       ; advance past extended byte
         ; Fall through to dar_set_gap
 dar_set_gap:
@@ -1643,9 +1620,7 @@ decode_row:             .byte   0       ; current row for pattern decode
 ordernumber:            .byte   0
 nextordernumber:        .byte   0
 hrordernumber:          .byte   0
-hr_skip_mask:           .byte   0       ; HR skip mask from bitstream (bits 0-2 for ch 0-2)
 forcenewpattern:        .byte   0
-hr_pad:                 .byte   0       ; Padding to keep PLAYERVARSSIZE even
 prefetch_done:          .byte   0       ; $80 = prefetch valid
 prefetch_order:         .byte   0       ; order position used for prefetch
 prefetch_row:           .byte   0       ; row used for prefetch
@@ -1681,20 +1656,12 @@ chn_src_off:            .byte   0, 0, 0        ; Byte offset into packed pattern
 chn_rle_count:          .byte   0, 0, 0        ; RLE count remaining
 chn_gap:                .byte   0, 0, 0        ; Gap value for current pattern (0,1,3,7,15,31,63)
 chn_gap_remaining:      .byte   0, 0, 0        ; Implicit zeros remaining after current row
-chn_prev_row_0:         .byte   0, 0, 0        ; prev_row byte 0 (note) per channel
-chn_prev_row_1:         .byte   0, 0, 0        ; prev_row byte 1 (inst|eff) per channel
-chn_prev_row_2:         .byte   0, 0, 0        ; prev_row byte 2 (param) per channel
+; Consecutive format: [ch0: b0,b1,b2], [ch1: b0,b1,b2], [ch2: b0,b1,b2]
+chn_prev_row:           .byte   0,0,0, 0,0,0, 0,0,0
 
-; Decode buffers (3 bytes × 3 channels = 9 bytes) - single row per channel
-decode_buffer_0:        .res    3
-decode_buffer_1:        .res    3
-decode_buffer_2:        .res    3
-
-; Decode buffer address tables
-decode_buffer_lo:
-        .byte   <decode_buffer_0, <decode_buffer_1, <decode_buffer_2
-decode_buffer_hi:
-        .byte   >decode_buffer_0, >decode_buffer_1, >decode_buffer_2
+; Row pointers (points directly to dict, chn_prev_row, or zero_row_data)
+chn_row_ptr_lo:         .byte   0, 0, 0        ; Row pointer lo per channel
+chn_row_ptr_hi:         .byte   0, 0, 0        ; Row pointer hi per channel
 
 ; Local variables for decode_advance_row
 dar_dict_idx:           .byte   0
@@ -1706,6 +1673,9 @@ dar_dict_idx_hi:        .byte   0
 
 sidregoffs:
         .byte   0, 7, 14
+
+times3_table:
+        .byte   0, 3, 6
 
 ; Gap code to gap value lookup table
 ; Code 0-6 maps to gap 0,1,3,7,15,31,63 (2^N - 1 for N>0)
@@ -1737,6 +1707,8 @@ freqtable_lo:
         .byte   $95,$a9,$fc,$8f,$69,$8c,$fe,$c2,$df,$58,$34,$78
         .byte   $2b,$53,$f7,$1f,$d2,$19,$fc,$85,$bd,$b0,$67,$ff
         ; Notes 96-103: 96-102 unused (read $00), 103 = remapped from 127
+; zero_row_data: 3 consecutive zeros for gap zero rows (points here for efficiency)
+zero_row_data:
         .byte   $00,$00,$00,$00,$00,$00,$00,$2f
 freqtable_hi:
         .byte   $01,$00,$00,$01,$01,$01,$01,$01,$01,$01,$01,$02

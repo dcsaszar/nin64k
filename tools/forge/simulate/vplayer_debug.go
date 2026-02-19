@@ -11,7 +11,19 @@ func CompareVirtual(
 	frames int,
 	startConst int,
 ) (bool, int, string) {
-	mp := NewMinimalPlayer(songData, numPatterns, deltaTable, transposeTable, waveTable, startConst)
+	return CompareVirtualWithDebug(origWrites, songData, deltaTable, transposeTable, waveTable, numPatterns, frames, startConst, false)
+}
+
+func CompareVirtualWithDebug(
+	origWrites []SIDWrite,
+	songData []byte,
+	deltaTable, transposeTable, waveTable []byte,
+	numPatterns int,
+	frames int,
+	startConst int,
+	debugMode bool,
+) (bool, int, string) {
+	mp := NewMinimalPlayerWithDebug(songData, numPatterns, deltaTable, transposeTable, waveTable, startConst, debugMode)
 
 	writeIdx := 0
 	for i := 0; i < frames; i++ {

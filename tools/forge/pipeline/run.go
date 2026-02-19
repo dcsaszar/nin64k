@@ -172,5 +172,14 @@ func runASMValidation(
 	}
 	fmt.Printf("\nASM validation: %d passed, %d failed\n", passed, failed)
 
-	simulate.ReportASMStats(allStats, playerData)
+	fullCoverage := simulate.ReportASMStats(allStats, playerData)
+
+	if failed > 0 {
+		os.Exit(1)
+	}
+
+	if !fullCoverage {
+		fmt.Println("\nFATAL: Code coverage is not 100% - all instructions must be executed")
+		os.Exit(1)
+	}
 }
