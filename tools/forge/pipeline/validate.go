@@ -111,9 +111,9 @@ func TestSong(cfg *Config, songNum int, rawData, convertedData, playerData []byt
 	cpuBuiltin.Call(bufferBase)
 
 	cpuBuiltin.SIDWrites = nil
-	cpuBuiltin.Cycles = 0
+	// Don't reset cycles - keep init cycles and include in frame 0 measurement
 	var origMaxCycles uint64
-	origPrevCycles := cpuBuiltin.Cycles
+	origPrevCycles := uint64(0) // Start from 0 to include init cycles in first frame
 	for i := 0; i < testFrames; i++ {
 		cpuBuiltin.CurrentFrame = i
 		cpuBuiltin.Call(playAddr)
@@ -150,7 +150,7 @@ func TestSong(cfg *Config, songNum int, rawData, convertedData, playerData []byt
 	cpuNew.Call(playerBase)
 
 	var maxFrameCycles uint64
-	prevCycles := cpuNew.Cycles
+	prevCycles := uint64(0) // Start from 0 to include init cycles in first frame
 	for i := 0; i < testFrames; i++ {
 		cpuNew.CurrentFrame = i
 		// Clear read history at frame 0 to only track actual playback

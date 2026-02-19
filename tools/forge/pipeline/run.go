@@ -22,7 +22,8 @@ func RunValidation(
 ) {
 	fmt.Println("\n=== Validate with VM ===")
 	if err := build.RebuildPlayer(cfg.ProjectPath("tools/odin_convert"), cfg.ProjectPath("build")); err != nil {
-		fmt.Printf("  Warning: could not rebuild player: %v\n", err)
+		fmt.Printf("FATAL: could not rebuild player: %v\n", err)
+		os.Exit(1)
 	}
 
 	playerData, err := os.ReadFile(cfg.ProjectPath("build/player.bin"))

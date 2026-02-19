@@ -10,5 +10,6 @@
 .include "../../src/odin_player.inc"
 
 ; Checkpoint stub for standalone player (no-op)
+; Important: Always assume A and P are modified by JSR checkpoint
 checkpoint:
         rts
