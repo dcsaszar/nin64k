@@ -53,56 +53,84 @@ func runVPValidation(
 	transformOpts transform.TransformOptions,
 ) {
 	fmt.Println("\n=== Transformed VP Validation ===")
-	vpPassed, vpFailed := 0, 0
 
+	type vpResult struct {
+		ok         bool
+		writes     int
+		msg        string
+		badEntries []string
+	}
+	vpResults := make([]vpResult, len(songs))
+	var wg sync.WaitGroup
+
+	// Prepare shared table conversions once
+	deltaBytes := make([]byte, len(tables.DeltaResult.Table))
+	for j, v := range tables.DeltaResult.Table {
+		if v == solve.DeltaEmpty {
+			deltaBytes[j] = 0
+		} else {
+			deltaBytes[j] = byte(v)
+		}
+	}
+	transposeBytes := make([]byte, len(tables.TransposeResult.Table))
+	for j, v := range tables.TransposeResult.Table {
+		transposeBytes[j] = byte(v)
+	}
+
+	// Run validation in parallel
 	for i, ps := range songs {
 		if ps == nil || outputs[i] == nil {
 			continue
 		}
+		wg.Add(1)
+		go func(idx int, ps *ProcessedSong) {
+			defer wg.Done()
+			testFrames := cfg.PartTimes[idx]
+			origWrites := simulate.GetOriginalWrites(ps.Raw, idx+1, testFrames)
 
-		testFrames := cfg.PartTimes[i]
-		origWrites := simulate.GetOriginalWrites(ps.Raw, i+1, testFrames)
+			ok, writes, msg := simulate.CompareVirtual(
+				origWrites,
+				outputs[idx],
+				deltaBytes,
+				transposeBytes,
+				tables.GlobalWave.Data,
+				len(ps.Encoded.PatternOffsets),
+				testFrames,
+				tables.DeltaResult.StartConst,
+			)
 
-		deltaBytes := make([]byte, len(tables.DeltaResult.Table))
-		for j, v := range tables.DeltaResult.Table {
-			if v == solve.DeltaEmpty {
-				deltaBytes[j] = 0
-			} else {
-				deltaBytes[j] = byte(v)
+			var badEntries []string
+			if !ok {
+				badEntries = bisectEquivEntries(cfg,
+					idx+1, ps, origWrites,
+					deltaBytes, transposeBytes, tables.GlobalWave.Data,
+					tables.DeltaToIdx[idx], tables.TransposeToIdx[idx],
+					tables.DeltaResult.Bases[idx], tables.TransposeResult.Bases[idx],
+					tables.GlobalWave.Remap[idx], tables.DeltaResult.StartConst,
+					testFrames,
+				)
 			}
-		}
-		transposeBytes := make([]byte, len(tables.TransposeResult.Table))
-		for j, v := range tables.TransposeResult.Table {
-			transposeBytes[j] = byte(v)
-		}
+			vpResults[idx] = vpResult{ok, writes, msg, badEntries}
+		}(i, ps)
+	}
+	wg.Wait()
 
-		ok, writes, msg := simulate.CompareVirtual(
-			origWrites,
-			outputs[i],
-			deltaBytes,
-			transposeBytes,
-			tables.GlobalWave.Data,
-			len(ps.Encoded.PatternOffsets),
-			testFrames,
-			tables.DeltaResult.StartConst,
-		)
-		if ok {
-			fmt.Printf("  %s: PASS (%d writes)\n", ps.Name, writes)
+	// Print results in song order
+	vpPassed, vpFailed := 0, 0
+	for i := range songs {
+		if songs[i] == nil || outputs[i] == nil {
+			continue
+		}
+		r := vpResults[i]
+		if r.ok {
+			fmt.Printf("  %s: PASS (%d writes)\n", songs[i].Name, r.writes)
 			vpPassed++
 		} else {
-			fmt.Printf("  %s: VFAIL - %s at write %d\n", ps.Name, msg, writes)
+			fmt.Printf("  %s: VFAIL - %s at write %d\n", songs[i].Name, r.msg, r.writes)
 			vpFailed++
-			badEntries := bisectEquivEntries(cfg,
-				i+1, ps, origWrites,
-				deltaBytes, transposeBytes, tables.GlobalWave.Data,
-				tables.DeltaToIdx[i], tables.TransposeToIdx[i],
-				tables.DeltaResult.Bases[i], tables.TransposeResult.Bases[i],
-				tables.GlobalWave.Remap[i], tables.DeltaResult.StartConst,
-				testFrames,
-			)
-			if len(badEntries) > 0 {
-				fmt.Printf("    Found %d bad equiv entries:\n", len(badEntries))
-				for _, entry := range badEntries {
+			if len(r.badEntries) > 0 {
+				fmt.Printf("    Found %d bad equiv entries:\n", len(r.badEntries))
+				for _, entry := range r.badEntries {
 					fmt.Printf("      %s\n", entry)
 				}
 			}
