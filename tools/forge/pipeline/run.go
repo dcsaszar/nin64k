@@ -137,6 +137,9 @@ func runVPValidation(
 		}
 	}
 	fmt.Printf("Virtual validation: %d passed, %d failed\n", vpPassed, vpFailed)
+	if vpFailed > 0 {
+		os.Exit(1)
+	}
 
 	fmt.Println("\n=== Verify Excluded Equiv Entries ===")
 	hasOptionalExclusions := checkExcludedEntries(cfg, songs, outputs, tables.DeltaResult, tables.TransposeResult, tables.GlobalWave, tables.DeltaToIdx, tables.TransposeToIdx, globalEffectRemap, globalFSubRemap, transformOpts, playerData)

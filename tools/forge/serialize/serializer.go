@@ -19,8 +19,7 @@ func Serialize(song transform.TransformedSong, encoded encode.EncodedSong) []byt
 	if numOrders > MaxOrders {
 		panic(fmt.Sprintf("too many orders: %d > %d", numOrders, MaxOrders))
 	}
-	hrSkip := encode.ComputeHRSkipMask(song)
-	bitstream := encode.PackOrderBitstreamWithHR(numOrders, encoded.TempTranspose, encoded.TempTrackptr, hrSkip, -1, -1)
+	bitstream := encode.PackOrderBitstream(numOrders, encoded.TempTranspose, encoded.TempTrackptr)
 	copy(output[BitstreamOffset:], bitstream)
 
 	filterSize := len(song.FilterTable)
@@ -688,8 +687,7 @@ func SerializeWithWaveRemap(
 		}
 	}
 
-	hrSkip := encode.ComputeHRSkipMaskWithDuplicate(song, duplicateOrder, duplicateSource)
-	bitstream := encode.PackOrderBitstreamWithHR(numOrders, relTranspose, relTrackptr, hrSkip, duplicateOrder, duplicateSource)
+	bitstream := encode.PackOrderBitstream(numOrders, relTranspose, relTrackptr)
 	copy(output[BitstreamOffset:], bitstream)
 
 	copy(output[FilterOffset:], song.FilterTable[:filterSize])
@@ -723,5 +721,17 @@ func SerializeWithWaveRemap(
 	// Write pattern data
 	copy(output[patternDataStart:], mainBlob)
 
-	return output[:findLastNonZero(output)+1]
+	// Output size is exactly patternDataStart + pattern data length
+	outputLen := patternDataStart + len(mainBlob)
+
+	// Validate: all pattern pointers must be within the output buffer
+	for i := 0; i < numPatterns; i++ {
+		ptrOff := finalOffsets[i]
+		if int(ptrOff) >= outputLen {
+			panic(fmt.Sprintf("pattern %d pointer ($%04X) beyond output buffer (len=$%04X)",
+				i, ptrOff, outputLen))
+		}
+	}
+
+	return output[:outputLen]
 }
