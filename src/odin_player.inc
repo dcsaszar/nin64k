@@ -1032,9 +1032,8 @@ filtdone:
         clc
         adc     chn_hardrestart+0
         cmp     speed
-        bcs     :+
-        jmp     @hr1_pf
-:       lda     chn_row_ptr_lo
+        bcc     @hr1_pf
+        lda     chn_row_ptr_lo
         sta     zp_trackptr
         lda     chn_row_ptr_hi
         sta     zp_trackptr+1
@@ -1077,9 +1076,8 @@ filtdone:
         clc
         adc     chn_hardrestart+0
         cmp     speed
-        bcs     :+
-        jmp     @hr1
-:       ldx     hrordernumber
+        bcc     @hr1
+        ldx     hrordernumber
         ldy     #0
         jsr     get_trackptr_order
         ldx     #0
@@ -1091,9 +1089,8 @@ filtdone:
         clc
         adc     chn_hardrestart+1
         cmp     speed
-        bcs     :+
-        jmp     @hr2
-:       ldx     hrordernumber
+        bcc     @hr2
+        ldx     hrordernumber
         ldy     #1
         jsr     get_trackptr_order
         ldx     #1
@@ -1104,9 +1101,8 @@ filtdone:
         clc
         adc     chn_hardrestart+2
         cmp     speed
-        bcs     :+
-        jmp     @dump
-:       jsr     checkpoint
+        bcc     @dump
+        jsr     checkpoint
         ldx     hrordernumber
         ldy     #2
         jsr     get_trackptr_order
